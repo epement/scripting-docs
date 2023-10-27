@@ -1,0 +1,2280 @@
+"Essentials of Shell Scripting"
+
+     by Eric Pement
+     2023-07-21 16:01:56 (UTC-0400)
+     version 7.4.0
+
+= PURPOSE =
+
+  This document is for Unix engineers who already know something about shell
+  scripts, but want a concise summary of the essentials. It is intended as a
+  reminder and a look-up document, not a tutorial.
+
+     See also: "Shell Scripting Best Practices"
+
+
+1. Scripting standards
+
+  This document focuses on bash (the Bourne Again shell) and ksh (the Korn
+  shell) for scripting. Scripts calling /bin/sh intend to execute a Bourne
+  shell, but they are usually symlinks to "/bin/bash" or "/bin/dash". Run
+  "file /bin/sh" to determine which shell "sh" points to.
+
+  Bash is preferred over ksh because it is more widely distributed, better
+  documented, and actively maintained. ksh is still active but has inadequate
+  maintenance and distribution.
+
+  Scripts in csh (C shell) or tcsh should be rewritten in bash or ksh, because
+  csh has no way to split stderr from stdout. For additional reasons, see
+  http://www.faqs.org/faqs/unix-faq/shell/csh-whynot/ or
+  http://www.grymoire.com/unix/CshTop10.txt
+
+
+2. bash versions
+
+  Except in a few areas, bash is compatible with scripts written for ksh.
+  Nearly anything that runs under ksh will run unchanged under bash, while
+  bash has some enhancements that ksh does not have.
+
+  The latest version of bash is 5.2. There are security vulnerabilities below
+  bash v4.4, and any version of bash below that should be upgraded. The
+  variable $BASH_VERSION shows the current version number. Source code is at
+  https://www.gnu.org/software/bash/
+
+
+3. ksh versions
+
+  The two major ksh versions are ksh88 (1988) and ksh93 (1993). Most Solaris
+  systems symlink "ksh" to ksh88. SUSE Linux systems symlink "ksh" to ksh93.
+
+  ksh versions have subscripts (88i, 93u, etc.). To see the version number,
+  run "echo $KSH_VERSION" or "/bin/ksh --version" or "man ksh". Older ksh88
+  version information is found by "echo ${.sh.version}" or "what /bin/ksh".
+
+  dtksh (Desk Top Korn Shell) is a version of ksh93 installed by default on
+  Solaris, AIX, and HP-UX. It resides at /usr/dt/bin/dtksh and provides some
+  graphical features and mappings not in standard ksh93. mksh (MirBSD Korn
+  Shell) is the default version of ksh on Cygwin and some Unix-like systems,
+  due to its license terms. It supersedes an earlier pdksh (Public Domain Korn
+  Shell), is compatible with ksh88, and has many features from ksh93.
+
+  ksh2020 was a short-lived but incompatible revision of ksh93u+. It has been
+  abandoned. The current, stable version is ksh93u+m, followed by a release
+  number. Source code is at https://github.com/ksh93/ksh
+
+
+4. Start-up files
+
+  The system first executes /etc/profile, which usually exists. This defines
+  variables like $HOME, $USER, $PATH, $SHELL, and $HOSTNAME.
+
+  For the rest of this document, "~" represents the $HOME directory.
+
+  If "/bin/bash" is the login shell, bash tries to run ~/.bash_profile,
+  ~/.bash_login, or ~/.profile, in that order. Bash runs the first one it
+  finds and does not execute the others, even if they exist.
+
+  If "/bin/ksh" is the login shell, ksh tries to run ~/.profile.
+
+  Init files (".bash_profile",".bash_login", or ".profile") should NOT contain
+  a command on the top line to invoke /bin/bash or /bin/ksh. The settings need
+  to execute in the current environment, not a subshell.
+
+4.1. cron and job scheduling
+
+  Scripts executed by cron, Control-M, Automic, or other job scheduling tools
+  will run under a user account, so they automatically inherit any environment
+  variables exported by ~/.bash_profile or ~/.profile.
+
+  Shell scripts that call /bin/bash will look for $BASH_ENV and load variables
+  from this file before executing the script.
+
+  Shell scripts that call /bin/sh will not look for an $ENV file.
+
+  Shell scripts that call /bin/ksh will depend on the version of ksh. ksh88
+  looks for and executes the script named by $ENV, but ksh93 will not.
+
+
+5. Which shell
+
+  Typing "echo $SHELL" does not report which shell is in use; it reports the
+  user's login shell. To determine which shell is currently active, run this
+  from a command prompt:
+
+      echo $0
+
+  Modern shells display the version number with $KSH_VERSION or $BASH_VERSION.
+
+  Older shells lack these variables. Run this script from the command prompt.
+  You may press ENTER or RETURN after a double pipe "||", double ampersand
+  "&&", or a single pipe "|", and the shell will let you continue the command
+  line.
+
+      num=1; ((num--))
+      ((num)) && echo ksh88 ||
+      ( [[ -n $BASH ]] && echo bash $BASH_VERSION || echo ksh93 $KSH_VERSION )
+
+  The script works because the decrement operator "--" exists in bash and
+  ksh93, but not in ksh88. If bash is active, the $BASH variable returns (that
+  is, "expands to display") the full path to bash. If bash is not active,
+  $BASH will not exist.
+
+
+6. Path elements
+
+  On the command line, $0 returns the current shell, which may be a subshell
+  or a child shell.
+
+  Inside a shell script, $0 returns the name of the script itself, which may
+  include a leading dot like "./sample.sh". The bash variable $BASH_SOURCE
+  also returns the name of the script. ksh has no equivalent variable.
+
+  Inside a function, $0 returns the name of the function.
+
+  "basename" expects a parameter or a filename argument. It strips off any
+  path name prefix and returns the bare filename. You can use:
+
+      basename $0                            # to print the name alone, or
+      echo This script is `basename $0`      # to insert in a sentence, or
+      echo This script is $(basename $0)     # to do the same thing.
+
+  To get the full, absolute path of the current script, use "realpath". In a
+  Cygwin environment, "cygpath" has more options than "realpath".
+
+      FULLPATH=$(realpath $0)
+
+  A leading pathname can be deleted or truncated with one of the variable
+  expansion brace forms. Specifically,
+
+      echo ${0##*/}          # same as "basename $0", strips the prefix of $0
+      echo ${FULLPATH%/*}    # inverse of "basename $0", strips the filename
+
+  Neither construction changes the value of $0 or other variables. They simply
+  return a reduced copy of the parameter, leaving the parameter itself
+  unchanged.
+
+
+7. Variable basics
+
+  Variables in shell scripts are case-sensitive (i.e., $home, $Home, and $HOME
+  are different variables). Watch out for capitalization errors.
+
+  Variable names do not use a "$" when defined. Add the dollar sign when the
+  variable must be expanded. Comments after variable definitions are allowed.
+
+      CAT=Garfield                # No quotes needed for single words
+      DOG="Mr. Peabody"           # Quotes for embedded spaces or special chars
+      echo "My dog is $DOG."      # Prints "My dog is Mr. Peabody."
+
+  Put NO SPACE on either side of the equal sign; however, indentation is okay.
+
+  Variable names may only contain alphanumerics or underscores. The hyphen (or
+  dash) is not allowed. The first letter cannot be a digit. Variable values
+  (on the right side of the equal sign) may contain any character, including
+  newlines. Shell wildcards like "?" and "*" and special characters like the
+  pipe, ampersand, parentheses, or angle brackets must be quoted.
+
+  Variables created only for the script should be lower_case, while variables
+  outside the script (in the environment) are normally UPPER_CASE. This is
+  programming advice, not a bash or ksh requirement. Shell scripts can access
+  internal, built-in variables, including LINENO, RANDOM, and REPLY, which do
+  not need to be explicitly defined.
+
+7.1. Shell variables
+
+  There are two types of variables: shell variables and environment variables.
+
+  Shell variables are local to each script. When a shell script runs, it
+  starts with a copy of the parent environment. When the script ends,
+  variables defined in the script go out of existence. By design, it is not
+  possible to alter variables in its PARENT environment.
+
+  However, shell variables are automatically inherited by "subshells" when a
+  script uses `backticks`, $(command_substitution), or single-parenthesis
+  "(command;groups;)", or when a background process is created by putting an
+  ampersand at the end-of-line.
+
+  See "Difference between (...) and { ... }", below, for more information.
+
+  Multiple variables can be defined on the same line, separated by spaces.
+  Adding semicolons does not change the assignment or meaning.
+
+      user="Juan Doe" city=Madrid today=`date +'%Y-%m-%d'`
+      user="Juan Doe"; city=Madrid; today=`date +'%Y-%m-%d'`  # same as above
+
+7.2. Environment variables
+
+  Environment variables are a special class of shell variable. They persist in
+  the current environment and are passed to child environments. They typically
+  specify values unlikely to change during a session, such as one's username
+  ($USER or $LOGNAME), terminal ($TERM), $PATH, $PAGER (to read man pages), or
+  preferred $EDITOR.
+
+  Run "/bin/env" to display all defined environment variables.
+
+  Run "set" (a shell built-in) to display all defined environment variables,
+  shell variables, and functions. Use "unset" (another shell built-in)
+  followed by a variable name to remove an environment or shell variable.
+
+  When you manually login to bash, environment variables are automatically set
+  by (1) /etc/profile, (2) ~/.bash_profile, ~/.bash_login, or ~/.profile, and
+  (3) ~/.bashrc.
+
+  In a shell script run by cron or Control-M, bash skips ~/.bashrc, but looks
+  for a file defined by $BASH_ENV.
+
+  When shell scripts fail in cron but work from the command line, it is often
+  due to undefined environment variables. One solution for cron is to set the
+  BASH_ENV environment variable, either at the top of the crontab or for
+  individual commands. This works in Vixie cron:
+
+      @daily BASH_ENV="$HOME/bin/init.sh" "$HOME/bin/myscript"
+
+7.3. Using export
+
+  Use "export" to turn shell variables into environment variables, making them
+  visible to child scripts and their descendants. Invoke like this:
+
+      NAME=value; export NAME           # bash or ksh88
+      export NAME=value                 # bash or ksh93
+
+  This session shows how shell variables relate to environment variables:
+
+      $ a="hello, world"                # define shell variable $a
+      $ echo Standard greeting: $a      # it persists in the shell
+      Standard greeting: hello, world
+      $ env | grep '^a='                # "env" does not have it
+      $ set | grep '^a='                # but "set" does
+      a='hello, world'
+      #
+      $ awk 'BEGIN{print "/" ENVIRON["a"] "/"}'
+      //                                # awk cannot see $a
+      $ export a                        # convert to an environment var
+      $ env | grep '^a='                # now it appears in "env"
+      a=hello, world
+      $ awk 'BEGIN{print "/" ENVIRON["a"] "/"}'
+      /hello, world/                    # now awk sees $a, too
+
+  Once exported, subsequent changes to environment variables do not need
+  additional "export" commands.
+
+      $ export var=one                  # create $var and export it
+      $ var=two                         # change value of $var
+      $ env | grep '^var='              # active immediately
+      var=two
+
+  Avoid putting "export PS1" in the init files (.bash_profile or .bashrc),
+  because if you switch to a different shell (like ksh, ash, or zsh) which
+  uses PS1, that definition will be passed to the other shell, which often
+  causes the prompt to fail due to differences in prompt escape sequences.
+
+7.4. Setting variables for one command
+
+  "export" adds the variable to the environment for the rest of the session
+  (or until the variable is manually deleted). However, it is possible to
+  apply environment variables to a single command, without having them persist
+  for the rest of the session.
+
+  This example redefines LC_ALL only for a single "sort" command. Often,
+  /bin/env or simply "env" is prefixed to the command line. For bash and
+  ksh93, the "env" prefix may be omitted.
+
+      env LC_ALL=C /bin/sort example > example.sorted
+      LC_ALL=C /bin/sort example > example.sorted        # for bash and ksh93
+
+  Multiple environment variables can be put on the same line:
+
+      AWKPATH=/usr/local/awk1 POSIXLY_CORRECT=1 awk -f example.awk file
+
+  Variables cannot be placed *after* the command because they will be
+  interpreted as command-line parameters.
+
+  The command "/bin/env -i" (for "ignore") empties the entire environment for
+  the specified command, except for variables on the same line. This creates a
+  clean environment for the execution of a test program.
+
+      /bin/env -i PATH="/bin" /opt/bin/demo   # erases all other variables
+
+
+8. Run scripts in the current environment
+
+  A lone "." (period) followed by a space is a command to run scripts in the
+  current environment, where they can read un-exported variables and modify
+  the current environment. In bash, "source" is an alias for this command.
+
+      . /path/to/a/script.sh            # ksh or bash
+      source /path/to/a/script.sh       # only bash (or ksh93j or later)
+
+  Use "." or "source" to add new variables to the current environment or to
+  confirm that required files, directories, etc. are present before proceeding
+  with the rest of the script.
+
+
+9. Quote marks and $variable expansion
+
+  "Double quotes" permit variables to expand to their stored values, while
+  'single quotes' do not. This is the most common error using $variables.
+
+  It's okay to use no quotes at all, but certain tools like sed and grep use
+  special symbols: pipe, bracket, ampersand, semicolon, etc. To protect
+  special symbols, wrap them in "double" or 'single' quotes.
+
+9.1. Using variables in awk
+
+  awk scripts use $ only to return the field value ($1, $2, $3), not to expand
+  awk user variables or built-in variables. In awk, NF is the number of fields
+  in the current line; $NF is the value of the last field; and $(NF-1) is the
+  value of the next-to-the-last field. Wrapping awk scripts in "double quotes"
+  will fetch $1, $2, and $NF from the shell, which is not what you want. Wrap
+  awk scripts in 'single quotes' to inhibit shell variables and permit awk
+  field numbers to be used.
+
+  To put a shell variable into an awk script when the script requires $ to be
+  used by awk, there are two options:
+
+      # Use double quotes; backslash both $ and double-quote inside the script
+      awk "/$HOSTNAME/ { print \"The last field is\", \$NF }"
+
+      # Use single quotes: use -v to assign shell variable to an awk variable
+      # Cannot use /h/ like above, because it will be interpreted literally,
+      # so we must use "$0 ~ h" to match the pattern on the line.
+      awk -v h="$HOSTNAME" '$0 ~ h { print "The last field is", $NF }'
+
+  In awk print statements, variables do not expand inside double-quoted strings.
+
+
+10. Using $*, $@, $#, and positional parameters
+
+  Parameters (arguments, tokens) passed to a shell script are accessed as $1,
+  $2, $3, etc. Use quotes to group parameters together. $0 is not a parameter:
+  it returns the name of the script.
+
+  IFS (internal field separator) is a built-in variable of 3 characters:
+  space, tab, and newline. Any characters in IFS may be used to separate
+  parameters, except that newline must be escaped.
+
+  $* and $@ (unquoted) expand to each individual parameter, with quote marks
+  stripped. Thus, {foo "bar baz"} will expand to 3 separate parameters for
+  either $* or $@, as {foo} and {bar} and {baz}.
+
+  "$@" (note the "double quotes") will expand {foo "bar baz"} to 2 parameters,
+  {foo} and {bar baz}, each separated by a space character.
+
+  "$*" (note the "double quotes") will expand {foo "bar baz"} to 2 parameters,
+  {foo} and {bar baz}, each separated by the FIRST char in IFS (usually but
+  not necessarily a space). Thus, "$*" and "$@" (quoted) will work the same,
+  unless IFS was changed.
+
+  $# counts the number of parameters. For {foo "bar baz" zap}, $# returns 3.
+
+  ${#2} and ${#ANY_VARIABLE} returns the length of $2 and the length of
+  $ANY_VARIABLE.
+
+  Finally, "shift" or "shift N" discards the first N parameters on the left
+  (default is 1); changes $N+1, $N+2 etc. to $1, $2 etc.; and reduces $# by N.
+
+
+11. When to use var, $var, and ${var}
+
+  Variables are normally defined with "VAR=value", but special variables (like
+  arrays) are defined with "set", "typeset", and "declare". In ksh, "typeset"
+  can force variables to be integers; to always display in a certain base
+  (octal, hex, etc.); to always expand to a certain length, prepending or
+  appending spaces or zeroes to fill the length; or to always display in CAPS
+  or lower-case. This reduces the use of printf to control print formatting.
+
+  "declare" is a bash name for "typeset"; "set" is used to define arrays.
+
+  The dollar sign is OPTIONAL inside of math statments: "let", ((...)), and
+  $((...)). You may use it, but it is normally omitted. The dollar sign is
+  REQUIRED in every other context.
+
+  $var and ${var} mean the same thing. ${var} shows where the variable ends
+  and can prevent the shell from searching for a longer name. E.g.,
+
+      echo "Email ${type}_mgt_${state}_dept"     # not "$type_mgt_$state_dept"
+
+
+12. Variables as arrays
+
+  Array variables are available. There are 2 types of arrays: arrays indexed
+  by number, and arrays indexed by strings ("associative arrays").
+
+  ksh and bash both support arrays indexed by numbers (numbering begins at 0,
+  not 1; awk arrays begin at 1).
+
+  To define indexed arrays, use square brackets for the position index. Note
+  that it is permitted to assign several values on the same line:
+
+      list[0]=foo  list[1]=bar  list[2]=baz
+
+  In bash, array creation can be shortened: "list=(foo bar baz)". This starts
+  the index beginning at zero.
+
+  In ksh, "set -A" creates arrays like so: "set -A list foo bar baz".
+
+  In bash, "set -A" does nothing. Bash uses "declare" or "typeset" to define
+  arrays, not "set", with switches "-a" (indexed) or "-A" (associative). But
+  as mentioned above, "declare" or "typeset" can be omitted. To begin indexing
+  at 1 instead of zero:
+
+      typeset -a month=( [1]=Jan Feb Mar Apr May Jun Jul )   # bash syntax
+      month[1]=Jan; month+=( Feb Mar Apr May Jun Jul )       # ksh93j or bash
+
+  Note: the "+=" operator used on arrays adds each element to the array,
+  incrementing from the highest previously used index.
+
+  Putting variables or math expressions inside the square brackets is okay, so
+  long as they resolve to integers:
+
+      list[$zero]=foo; list[$unos]=bar; list[2*(i+1)]=baz
+
+  To use or expand array variables, you MUST use curly braces:
+
+      echo "The pipe symbol is a vertical ${list[1]}."
+
+  Count array elements using '#' as the first character:
+
+      echo "The list array has ${#list[@]} elements"
+
+  Loop through all the array elements using '!' as the first character. This
+  will return the keys in numeric order:
+
+      for i in "${!month[@]}"; do echo "Month number $i is ${month[$i]}"; done
+
+12.1. Using associative arrays
+
+  Associative arrays are not available in ksh88 or mksh. In bash or ksh93,
+  associative arrays must be pre-declared with "typeset -A arrayname". Bash
+  supports "declare" as a built-in synonym for "typeset".
+
+  Bash and ksh93 both create associative arrays the same way:
+
+      typeset -A month                    # requires capital A
+      month=( [Jan]=1 [Feb]=2 [Mar]=3 )   # without repeating the array name
+      month[Apr]=4  month[May]=5          # or repeat the array name each time
+
+  If you fail to use "typeset -A" to set up associative arrays, the shell will
+  look at the [subscript], find no numbers, and evaluate the subscript as zero.
+
+      number[one]=1  number[two]=2  number[three]=3  number[four]=4
+      # creates an indexed array with only one element: number[0]=4,
+      # because "typeset -A" was not used to create associative arrays
+
+  Use curly braces to expand associative array variables:
+
+      echo "May is month number ${month[May]}."   # returns "... number 5."
+
+  Counting array elements and looping through associative arrays is the same
+  as with standard indexed arrays.
+
+  When you loop through associative arrays in ksh93 with "${!array[@]}", the
+  keys are returned in alphabetical order. In bash, the keys are returned in
+  random order. The "quotes" around "${!assoc[@]}" may be omitted if you know
+  that the array keys do not contain embedded spaces or tabs.
+
+      for k in "${!assoc[@]}"; do echo "Key is $k, value is ${assoc[$k]}"; done
+
+  To sort those keys in bash, wrap the entire command in single parentheses or
+  curly braces, and pipe the output to "sort". See the next section.
+
+  Multidimensional arrays are NOT supported in ksh or bash, but they can be
+  partially emulated using commas within subscript square brackets. Example:
+
+      $ typeset -A family
+      $ family=(
+      >  [Flintstone,Dad]=Fred   [Flintstone,Mom]=Wilma
+      >  [Rubble,Dad]=Barney     [Rubble,Mom]=Betty
+      >  [Simpson,Dad]=Homer     [Simpson,Mom]=Marge
+      > )
+      $ echo "The mom in the Flintstone family is ${family[Flintstone,Mom]}."
+      The mom in the Flintstone family is Wilma.
+
+  The comma is not a special character here; it's just a separator.
+
+12.2. Use += to augment or append to variables
+
+  The "+=" operator expands string variables by appending the value to the end.
+
+      tmp_paths="${tmp_paths}:/var/tmp"  # one way
+      tmp_paths+=":/var/tmp"             # cleaner, easier to read
+
+  If the variable is typeset or declared as an integer, "+=" will add another
+  number to it. Otherwise, "+=" will append the value as a string.
+
+      $ var=7; var+=5; echo "var is now $var"
+      var is now 75    # If $var is undeclared. it is treated as a string
+      $ declare -i var=7; var+=5; echo "var is now $var"
+      var is now 12    # $var must be declared to be treated as an integer
+
+  If the variable is typeset as an array, "+=" adds additional elements to it.
+
+      # standard arrays, indexed from 0
+      # In bash, the parentheses signal to create an array or append to one
+      numbers=( zero one two ); numbers+=( three four )
+
+      # associative arrays:
+      colors+=( [green]=OK  [red]=failed  [gray]=waiting )
+
+
+13. Subshells and background execution
+
+13.1. Difference between (...) and { ... }
+
+  Commands enclosed in ( single parentheses ) run in a SUBSHELL, a copy of the
+  current environment, with the additional feature that unexported variables
+  and functions are also copied. Changes to the subshell do not affect the
+  parent environment. Pipes, multiple commands, and conditional execution
+  ("&&" or "||") are allowed within the parentheses.
+
+  For example, bash returns the keys of associative arrays in random order,
+  but the output can be sorted by grouping it with parentheses. The output of
+  the subshell can be piped into another program.
+
+      (for k in ${!arr[@]}; do echo "Key = $k, val = ${arr[$k]}"; done) | sort
+
+  Commands enclosed in { curly braces } run in the CURRENT SHELL, not a
+  subshell. The braces restrict or group the commands. For example:
+
+      [[ -r $file ]] || { echo "Cannot read $file. Exiting ..."; exit 1; }
+      perl $file
+
+  Suppose $file is not readable. With curly braces, if $file is not readable,
+  the script echos a message and exits immediately. The perl command will not
+  run at all.
+
+  If the curly braces are replaced with parentheses, the script will echo a
+  message, but the perl command and the rest of the script will continue!
+
+  If the curly braces are omitted (not used at all), the script ALWAYS exits,
+  even if $file is readable.
+
+  Another way to see the difference between braces and parens:
+
+      x=3; y=3;    # both $x and $y start with the same value
+      { echo I can see $x; (( x += 1 )); }   # braces
+      ( echo I can see $y; (( y += 1 )); )   # parens
+      # $x is now 4, because its addition was in the current environment
+      # $y is still 3, because its addition occurred in a subshell
+
+  Inside single braces, changes to variables will affect the main environment.
+  Inside single parentheses, changes to variables will not affect it.
+
+  Note: Single-parenthesis (command; groups;) do not require spaces before or
+  after the parentheses, but single-brace { command; groups; } require a
+  space, tab, newline, or punctuation mark both before and after the brace
+  symbols. Remember: "Put a space around each { brace }" and you'll be fine.
+
+13.2. Difference between `...` and $(...)
+
+  Both `this` and $(this) are forms of command substitution. Both accept
+  parameters and internal pipes (e.g., `cal | tail -1`), and are typically
+  used on the right side of a variable=`assignment`. Both commands run in a
+  subshell and return all output to the variable, except that leading and
+  trailing newlines are removed first.
+
+  Commands which normally append a newline to the output (like grep and sed)
+  do not need to be adjusted to remove the trailing newline. Leading or
+  trailing spaces are NOT removed.
+
+  Backticks by themselves, without anything on left or right, are harmless but
+  useless. Backticks are never needed simply to run a command.
+
+  Backquotes are now deprecated in favor of $(command substitution), because
+  multiple $(commands) can be nested without quoting, like $(this $(here)).
+  You must do `this \`here\`` if using backticks. Also, backslash and "$" must
+  themselves be backslash-quoted inside `...`, where backslash quoting is not
+  needed in $(this form).
+
+13.3. Simultaneous execution and background jobs
+
+  To run two, three, or more commands simultaneously rather than sequentially
+  (where job #1 must end before job #2 begins), put an ampersand ("&") at the
+  end of the command line for job #1. The trailing ampersand runs the command
+  in a subshell, hiding it from the foreground (the visible console) and
+  executing it in the background.
+
+  If the command is a console-based command (like awk or sort), it will be
+  invisible. For commands like xterm, the trailing ampersand lets it spawn a
+  new terminal window and immediately return control to the original shell.
+
+  The exit code from background command will be 0 if the shell could spawn a
+  new process or 1 if the shell could not spawn a background process. The exit
+  code will NOT be the code returned by the command, because *by design* we do
+  not wait for the job to finish.
+
+  For scripts with background jobs, it is VERY common for the parent script to
+  end before the background job is finished. Remember that the parent script
+  can end successfully and the background job fail.
+
+  The process ID of the last background process is $! in ksh and bash.
+
+
+14. Difference between [ ... ] and [[...]] and ((...))
+
+  [ ... ], [[...]], and ((...)) are all used in "test" contexts. The first two
+  test for strings or numbers; the last one is strictly for math expressions.
+
+14.1. "[ ... ]" requires a space after '[' and a space before ']'
+
+  "[[...]]" is built into ksh/bash and does not require these spaces. [ ... ]
+  invokes /bin/test. [[...]] is built-in, so it is faster. The ((...)) test
+  doesn't need spaces before or after the parentheses.
+
+14.2. The "=" means different things inside [ ... ] and [[...]]
+
+  Inside single brackets, an equal sign always tests for string equality,
+  regardless of whether the right parameter is "quoted" or not.
+
+  Inside double square brackets, an equal sign tests for string equality if
+  the parameter to the right is "quoted". If the right parameter is NOT
+  quoted, the equal sign tests for shell wildcard patterns. Example:
+
+         [ abcd4 =  ab*[1-5]  ]      # returns false
+        [[ abcd4 =  ab*[1-5]  ]]     # returns TRUE
+        [[ abcd4 = "ab*[1-5]" ]]     # returns false
+
+  To use wildcards or special patterns (e.g., [1-5]), put the pattern on the
+  right side of the "=" or "==" sign, and omit the double-quotes.
+
+  Note that the right side of a [[bracketed]] test has implied ^ and $ anchors
+  at the beginning and end of the pattern. Contrast this with grep, where
+  substrings will match and there are no implied anchors. For example:
+
+       echo test | grep "es"         # matches
+       [[ test = es ]]               # does not match
+
+  See the section below on "Shell wildcards" for more details.
+
+14.3. Comparing numbers or strings?
+
+  If checking for STRING equality, use:
+
+        [[ $pattern == "string" ]]  or  [ "$pattern" = "string" ]  or
+        [[ $pattern = shell_wildcards ]]
+
+  If checking for NUMERIC equality (or inequality), use:
+
+        (( $? == 0 ))   or    [[ $? -eq 0 ]]  or      [ $? -eq 0 ]
+        (( $num > 0 ))  or  [[ $num -gt 0 ]]  or  [ "$num" -gt 0 ]
+
+14.4. Filename wildcards expand inside [ ... ], but not inside [[ ... ]]
+
+  Inside single square brackets [ ... ], unquoted patterns like foo*, b?r, and
+  ba[Zz] are expanded to FILENAME wildcards and they will match filenames if
+  the pattern matches fully. (Example: unquoted b?r will match a file named
+  "bar" but not a file named "barn")
+
+  Inside double square brackets [[...]], unquoted patterns like foo*, b?r, and
+  ba[Zz] are expanded to SHELL wildcards, which can only match strings and
+  variable values, but can NEVER match filenames.
+
+  Both bash and ksh work the same here. This shows the difference:
+
+        $ touch abc         # Creates an empty file
+        .
+        $ [  -f a*c  ] && echo File found || echo No luck
+        File found          # because the pattern was unquoted
+        .
+        $ [ -f "a*c" ] && echo File found || echo No luck
+        No luck             # because a string was "quoted"
+        .
+        $ [[ -f a*c ]] && echo File found || echo No luck
+        No luck             # because [[...]] changes the context
+        .
+        $ [[ -f abc ]] && echo File found || echo No luck
+        File found          # because the filename was explicit
+
+  Do not confuse filename wildcards (which match files in a disk directory)
+  with shell wildcards (which match strings and variable values). If you want
+  to use file-test operators like -f, -d, -r (file-exists, directory-exists,
+  file-is-readable), use single brackets and unquoted filename wildcards or
+  else use double brackets and exact filenames.
+
+  Using [[ double brackets ]] and unquoted wildcards changes the context to
+  treat wildcards as shell wildcards. Shell wildcards follow an equal sign.
+
+14.5. Boolean operators within [ ... ] and [[ ... ]] are different
+
+  Within [ ... ], use -a for an AND test. E.g., "[ -r file -a -x file ]".
+  Within [[...]], use && for an AND test. E.g., "[[-r file && -x file]]".
+
+  Within [ ... ], use -o for an OR test. E.g., "[ -f file1 -o -f file2 ]".
+  Within [[...]], use || for an OR test. E.g., "[[-f file1 || -f file2]]".
+
+14.6. Variables in [ ... ] need "quotes"; vars in [[...]] don't need them
+
+  Within [ ... ], if $file is not defined, "[ -r $file ]" will return TRUE for
+  ANY FILE TEST CONDITION (-r, -w, -x, -d, -f, -s, etc.)!! The variable must
+  be "quoted" to return the correct value of FALSE.
+
+  Within [ ... ], if $string is not defined, "[ -n $string ]" will return
+  TRUE, though it should return FALSE ('-n' is a test for non-zero length). In
+  fact, '[ -n ]' by itself will return TRUE! Thus, inside single brackets
+  "$string" should always be "double-quoted" to return its correct value.
+
+  Within [[ ... ]], if $file is not defined, the file test condition will be
+  correct whether "quotes" appear or not. Likewise, if $string is not defined
+  or is null, the double brackets will return the correct value for -n and -z,
+  whether the variable is "quoted" or not.
+
+
+15. Comparing numbers in ((...)) or [[...]]
+
+  Use == for equal numbers in ((...)); use -eq for numbers in [[...]].
+
+  Use > or < for numbers in ((...)); use -gt or -lt for numbers in [[...]].
+
+  [[ 0 ]] returns TRUE, because zero is treated as a string by [[...]].
+
+  (( 0 )) returns FALSE, because zero is treated as a number by ((...)).
+
+
+16. Complex ${variable} expansion
+
+  Complex brace forms like ${var:5:3}, ${var-foo}, ${var=foo}, ${var/foo},
+  ${var+foo}, ${var##foo}, ${var%foo}, etc. either alter $var itself (e.g.,
+  "${var=foo}") or modify what $var normally outputs without changing $var.
+
+  The complex forms lets us change what a variable prints in one situation
+  without changing the variable permanently.
+
+  In the table below, the top 3 examples use a colon. The colon-and-symbol
+  checks whether the variable is true (declared and set to a non-null string).
+  NOTE: 0 is considered "true" for variable expansion, but false in other
+  contexts. See the section on "Comparing numbers in ((...)) or [[...]]".
+
+  In the middle 3 cases without the colon, the test is only whether $v was set
+  (defined), not whether $v is non-null. Example: in the variables "x=0" and
+  "y=", $x is set and true, $y is set and null, and $z is unset (not set).
+
+      ${v:-WORD}  If $v is true, print $v. Else, print WORD but don't change $v
+      ${v:=WORD}  If $v is true, print $v. Else, print WORD and assign it to $v
+      ${v:+WORD}  If $v is true, print WORD. Else, return nothing
+      ----------  ----------------------------------------------------------------
+      ${v-WORD}   If $v is unset, print WORD. Else, print $v
+      ${v=WORD}   If $v is unset, assign WORD to $v and print WORD. Else, print $v
+      ${v+WORD}   If $v is unset, print nothing. Else, print WORD
+      ---------- -----------------------------------------------------------------
+      ${v#patt}   Del small left patt ---> ${PATH#*:}   Del first element of $PATH
+      ${v##patt}  Del large left patt ---> ${FILE##*/}  Print basename of $FILE
+      ${v%patt}   Del small right patt --> ${PATH%:*}   Del last element of $PATH
+      ${v%%patt}  Del large right patt --> ${PATH%%:*}  Print 1st element of $PATH
+
+  The bottom 4 examples use "#" or "%" to delete characters at the beginning
+  or end of the variable. Memory trick: in #12 or 12%, the pound sign comes at
+  the beginning and the percent sign comes at the end. "##" and "%%" double
+  the symbol, so "#" is a minimal match and "##" is a maximal match. Example:
+
+      var=abc/def/ghi/jkl   # define the variable $var
+      echo ${var#*/}        # minimal del of */ at front, prints "def/ghi/jkl"
+      echo ${var##*/}       # maximal del of */ at front, prints "jkl"
+      echo ${var%/*}        # minimal del of /* at end, prints "abc/def/ghi"
+      echo ${var%%/*}       # maximal del of /* at end, prints "abc"
+      echo ${var%jk}        # "jk" is not at the end, prints $var unchanged
+
+16.1. Shell wildcards
+
+  In the previous section the term "patt" (short for pattern) represents shell
+  patterns or wildcard expressions. Technically they are shell filename globs,
+  not Unix regular expressions. Do not confuse shell wildcards with regular
+  expressions, although both of them share some symbols in common.
+
+  Regular expressions use "^" and "$" to signify the beginning-of-pattern and
+  end-of-pattern, respectively. "*", "+", and "?" are quantifiers to indicate
+  zero-or-more, one-or-more, or zero-or-one of the PRECEDING atom (an "atom"
+  can be a character, a parenthesized group, or an escape sequence like "\w").
+  In "basic regular expressions", prefix "+" and "?" with a backslash to use
+  them as quantifiers. In extended or Perl regexes, omit the backslash to use
+  them as quantifiers; add the backslash to use them as literal characters.
+
+  In shell wildcards, "*" and "?" DO NOT address the preceding character.
+  Asterisk "*" matches 0 or more characters (except it will not match a
+  leading dot in a filename, which creates hidden files in Unix). "?" matches
+  exactly one character.
+
+  Regular expressions and the shell both support simple character sets, where
+  "[abc123]" matches any single character in square brackets. The shell and
+  regexes also permit range expressions like "[a-j]" or "[0-9a-zA-Z]".
+
+  In bash and ksh, "[!...]" is a negated character set, matching any character
+  EXCEPT those in the enclosed brackets. Regexes begin negated character sets
+  with a caret, as "[^...]". Bash now lets either "!" or "^" introduce a
+  negated character set, as a convenience for experienced regex users.
+
+16.2. Extended pattern matching
+
+  In bash and ksh, extended patterns are supported for variable expansion and
+  tests with square brackets, like [...this...] or [[..this..]]. In the table
+  below, "pattern-list" is a list of patterns separated by the pipe, e.g.,
+  "(foo|bar|baz)".
+
+      ?(pattern-list)   matches 0 or 1 of the given patterns
+      *(pattern-list)   matches 0 or more of the given patterns
+      +(pattern-list)   matches 1 or more of the given patterns
+      @(pattern-list)   matches any of the given patterns
+      !(pattern-list)   matches anything except one of the given patterns
+
+  Remember that regular expressions use postfix quantifiers "(like|this)+".
+  Shell extended patterns use prefix quantifiers "+(like|this)".
+
+  BASH ONLY: Extended matching is automatically available for expansion or
+  tests, but not filename matching (e.g., "/bin/ls @(aa|bb|cc)"). Enable
+  extended filename matching using the "shopt" command to set shell options,
+  as "shopt -s extglob".
+
+  KSH ONLY: Extended matching is automatically available for both tests and
+  filename matching. New versions of ksh (like ksh93) support additional
+  quantifiers for extended patterns:
+
+      {n}(pattern-list)    matches exactly n occurrences of any of the patterns
+      {m,n}(pattern-list)  matches from m to n occurrences of the patterns
+      {,n}(pattern-list)   matches from 0 to n occurrences of the patterns
+      {m,}(pattern-list)   matches m or more occurrences of the patterns
+
+16.3. Selecting substrings
+
+  Use ${v:n} to extract the "tail" of $v, beginning at position n, where the
+  position counting begins at zero. This does not change $v.
+
+  Use {v:n:m} to extract a substring of $v, beginning at position n and
+  continuing for the next m characters. Example:
+
+      za=abcdefgh       # define variable $za
+      echo ${za:3}      # returns "defgh"
+      echo ${za: -2}    # retuns "gh", last 2 chars. Space needed before "-"
+      echo ${za:0:1}    # returns "a"
+      echo ${za:2:4}    # returns "cdef"
+      echo ${za: -3:2}  # returns "fg"
+
+16.4. Replacing strings
+
+  Use ${v/patt/string} to replace the FIRST occurrence of patt with "string".
+  Use ${v/patt/} to delete the first occurrence of patt, replace with nothing.
+
+  Use ${v//patt/string} to replace ALL occurrences of patt with "string".
+  Use ${v//patt/} to delete all occurrences of the pattern.
+
+  If you need to replace the n-th occurrence of a pattern, the only option is
+  sed or GNU awk. Example:
+
+      new=`echo $old | sed 's/regex/string/4'`   # replace the 4th match only
+      new=`echo $old | gawk '{print gensub(/regex/, "string", 4)}'   # ditto
+
+  For ${v/#patt/string}, if patt matches at the FRONT end of $v, replace patt
+  with "string". Omit "string" to delete the pattern.
+
+  For ${v/%patt/string}, if patt matches the LAST chars of $v, replace patt
+  with "string". Omit "string" to delete the pattern.
+
+  Although these same operations can be easily written using sed, doing them
+  using bash built-in conversion is *much* faster because it avoids invoking a
+  separate subshell to run sed (or expr, awk, etc.). Here is how they compare:
+
+      echo $(sed 's/regex/str/' <<< $v)    # replace 1st match of regex
+      echo ${v/patt/string}                # same, using bash patterns
+
+      echo $(sed 's/regex/str/g' <<< $v)   # replace all matches of regex
+      echo ${v//patt/string}               # same, using bash patterns
+
+      echo $(sed 's/^regex/str/' <<< $v)   # replace regex at front of $v
+      echo ${v/#patt/string}               # same, using bash patterns
+
+      echo $(sed 's/regex$/str/' <<< $v)   # replace regex at end of $v
+      echo ${v/%patt/string}               # same, using bash patterns
+
+  Don't forget that bash patterns are not regular expressions.
+
+16.5. Case conversion
+
+  The "typeset" built-in command has two option switches, "-l" and "-u", to
+  convert input values to lower-case and upper-case, respectively. Example:
+
+      typeset -l lname="$value"  # The new variable $lname is now lower-case
+
+  BASH ONLY:
+  Use ${v^[a-m]} to capitalize the 1st letter of $v, if it matches [a-m].
+  Use ${v^} to capitalize the first letter of $v, regardless of what it is.
+
+  Use ${v,[N-Z]} to lower-case the 1st letter of $v, if it matches [N-Z].
+  Use ${v,} to lower-case the first letter of $v, regardless of what it is.
+
+  Use ${v^^[g-p]} to capitalize ALL the letters of $v that match [g-p].
+  Use ${v^^} to capitalize ALL the letters of $v.
+
+  Use ${v,,[A-E]} to lower-case ALL the letters of $v that match [A-E].
+  Use ${v,,} to lower-case ALL the letters of $v.
+
+16.6. Variable dereferencing and expansion in bash and ksh93
+
+  The three-character syntax "${!" where the exclamation mark is the first
+  character before a variable name is used for 3 ways of expanding variables
+  and arrays in bash and ksh93. This syntax is not available in ksh88.
+
+16.6.1. Dereference variables
+
+  The syntax "${!var}" expects that the value of $var is the name of another
+  variable, and it tries to return the value of that variable. Example:
+
+      COLUMNS=193
+      screen_width=COLUMNS
+      echo "The width of the screen is ${!screen_width}"   # returns 193
+
+  This syntax is often used when the variable might be assigned to several
+  different variable names.
+
+  bash and ksh93 act differently when the variable value doesn't point to
+  another variable name. Suppose "COLUMNS=193" was not defined in the example
+  above. In ksh93, "${!screen_width}" returns "screen_width". In bash,
+  "${!screen_width}" returns nothing.
+
+  To indicate that there is nothing to dereference, use the "-" or the "?"
+  expansion tokens. Using the previous example:
+
+      ${!screen_width-undefined}  # prints "undefined" to stdout and continues
+      ${!screen_width?undefined}  # prints "undefined" and line no. and aborts
+
+  The hyphen "-" is described in "Complex ${variable} expansion", above. The
+  question mark "?" is described in "Abort the script if variable is not
+  defined", below.
+
+16.6.2. Return variable names matching initial letters
+
+  Both "${!prefix*}" and "${!prefix@}" will return a list of variable names
+  that begin with the specified letters, but only "${!prefix@}" inside "double
+  quotes" should be used to step through variable names in a "for" loop. For
+  example:
+
+      # create 5 variables that all begin with "ban"
+      band=Beatles bane=harm bang="Pop!" bank=savings bans=prohibits
+      # show variable name and value for each
+      for n in "${!ban@}"; do echo "name is $n, value is ${!n}"; done
+
+  Using the "double quotes" is required for proper argument expansion.
+
+16.6.3. Return array keys
+
+  Both "${!array[*]}" and "${!array[@]}" will return a list of keys for the
+  specified array, but only "${!array[@]}" inside "double quotes" should be
+  used to step through the array keys in a "for" loop:
+
+      for k in "${!array[@]}"; do echo "key=$k, value=${array[$k]}"; done
+
+  "Double quotes" prevent incorrect expansion of array keys.
+
+16.7. The null command
+
+  A lone ":" (colon) is the null command, built-in to ksh and bash. It does
+  nothing, but its return status is true. It is used in "while :" (loop
+  forever till a "break" occurs) or as an empty action in an "if" test:
+
+      if grep -q "$pattern" $file; then
+          :
+      else
+          echo "$pattern did not appear in the file $file"
+      fi
+
+  The null command accepts arguments and is often seen like this:
+
+      : ${color:=blue}  # set $color if $color is null or not defined
+      : > newfile       # create "newfile", or empty it if it exists
+
+  We just want to set $color to "blue" if $color is not already set. If we
+  omit the leading colon, bash/ksh will assign the variable, try to run a
+  command called "blue", not find it, and emit an error message saying "blue:
+  command not found"! This lets us redefine the variable alone, without doing
+  anything else.
+
+  Because of how redirection works, the second line "> newfile" does not need
+  a leading colon and will run without error if the colon is omitted. However,
+  you will often see it anyway, as a legal construction.
+
+16.8. Abort the script if variable is not defined
+
+  If a variable MUST be defined for a script to run correctly, this syntax
+  will print the value of the variable *OR* if it is not set, abort the script
+  at that point, exiting with exit code of 1 and sending a message to the
+  standard error device. Examples:
+
+      echo Name of TERM is ${TERM:?"not set"}  # abort if TERM was not set or is empty
+      echo Name of TERM is ${TERM?"not set"}   # abort only if TERM was not defined
+      echo Name of TERM is ${TERM?}            # abort if not set, use default message
+
+  The form with ":?" will abort if $TERM was never defined or if it was
+  defined but is null (e.g., this could happen with "TERM=$2" if no parameters
+  were passed on the command line). This is the most practical syntax.
+
+  A bare "?" will abort only if no attempt was made to set the variable. If
+  the variable is null, the script will echo nothing and continue. The default
+  error message for "${TERM?}" looks something like this:
+
+      scriptname: line 3: TERM: parameter null or not set
+
+  Because the syntax is uncommon, many scripts use a more obvious test for
+  empty parameters, such as "if [[ -z $TERM ]]" or "if [ -z "$TERM" ]".
+
+16.9. Other
+
+  For other complex or rare expressions, such as ${m@op}, see 'man bash' or
+  "The Advanced Bash Scripting Guide," Section on Parameter Substitution.
+
+
+17. File tests
+
+17.1. Tests with one filename
+
+  The Unix command "test -s file" is usually  written "[ -s file ]", where the
+  single left square bracket is an alias for "test". A similar set of commands
+  is available in ksh and bash as "[[ ... ]]". There are many switch options;
+  these are the most common, and are present in all versions of bash and ksh.
+
+      -e            File exists
+      -s            File must exist and have a size greater than 0
+      -f, -d, -L,   File must exist and be a (regular file, directory, symlink)
+      -r, -w, -x    File must exist and be (readable, writable, executable)
+
+17.2. Test with two filenames
+
+      file1 -nt file2   file1 is newer than file2, or file2 does not exist
+      file1 -ot file2   file1 is older than file2, or file2 does not exist
+      file1 -ef file2   file1 and file2 are hard links (have the same inode numbers)
+
+17.3. Tilde must be unquoted to expand to the home directory
+
+  For file test operators (-f, -r, etc.), if ~ is intended to represent the
+  user's $HOME directory, it cannot be wrapped in double or single quotes.
+
+      [  -f ~/.bashrc   ]     # file is found
+      [[ -f ~/.bashrc   ]]    # file is found
+      [  -f "~/.bashrc" ]     # file NOT found
+      [[ -f "~/.bashrc" ]]    # file NOT found
+
+  When assigning to variables, tilde cannot be quoted if it should expand.
+
+      my_aliases=~/.aliases   # omit quotes when making definitions
+
+
+18. Other test operators
+
+18.1. String tests
+
+  Expect a $variable containing a string.
+
+      -z "$var"        # true if $var is empty (zero length) or not defined
+      -n "$var"        # true if $var has non-zero length
+      $var             # true if $var has non-zero length
+
+18.2. Comparison operators
+
+  Expect two strings or patterns to be equal or match.
+
+      string1 = string2    # true if strings match (as "strings" or shell globs)
+      string1 != string2   # true if strings are not equal or do not match
+      "$var" = string      # test for pattern match if $var might be empty
+      ${var}X = stringX    # another matching test if $var might be empty
+      [[ $str1 < $str2 ]]  # true if $str1 sorts before $str2, accdg to locale
+      [[ $str1 > $str2 ]]  # true if $str1 sorts after $str2, accdg to locale
+      [[ $str == shglob ]] # true if $str matches this shell wildcard
+      [[ $str != shglob ]] # true if $str does not match the shell wildcard
+      [[ $str =~ regex ]]  # true if $str matches an extended regex (bash, ksh93s+)
+
+  Numeric comparisons with "[ ... ]" or "[[...]]" must use integers.
+
+      int1  -eq,-ne  int2  # Equal, Not equal
+      int1  -gt,-ge  int2  # Greater than, Greater than or equal to
+      int1  -lt,-le  int2  # Less than, Less than or equal to
+
+18.3. Logical operators
+
+  Use "!" to create a logical NOT prefix. Example: "[[ ! -d $file ]]"
+
+  Use "-a" (logical AND) within "[ ... ]", but "&&" within "[[...]]".
+
+  Use "-o" (logical OR) within "[ ... ]", but "||" within "[[...]]".
+
+
+19. Loops: while, until, for, break, and continue
+
+19.1. Structure of "while", and a "read" example
+
+  A "while" loop checks the value of a condition or condition-list. So long as
+  the conditions are still true, it repeatedly executes the commands between
+  "do" and "done". The loop ends if the condition-list becomes false.
+
+      while some-condition-list
+      do
+          command-list;
+          ...
+      done
+
+  The "condition list" does not have to be a [[test]] or ((math)) condition,
+  so brackets or parens are not required. It can be a simple command to read a
+  line from a file. A common structure is this, which ends after all the lines
+  have been read:
+
+      while read line             # "line" is a variable being defined here
+      do
+          something-to $line >> /tmp/output_file    # use $line
+          ...                     # run other commands
+      done < /tmp/input_file
+
+  If the $line variable is not used, $REPLY is available by default:
+
+      while read                  # get manual or piped input
+      do
+          something-to $REPLY     # the value of the input line
+          ...
+      done
+
+  The "while" loop often starts with a condition that is always true. Endless
+  loops are stopped by invoking "break" to exit the loop after a certain
+  condition has been met (e.g., a counter number is reached), or sometimes by
+  using a "kill" command on the process id. A common structure for an endless
+  loop is "while :" or the more legible "while true". In awk and perl scripts,
+  this is often written as "while (1)".
+
+19.2. Structure of "until"
+
+  "until" loops are the opposite of "while" loops. They presume the condition
+  is already false, and continue looping until the condition becomes true.
+  "until (condition-list)" is the same as "while (! condition-list)".
+
+  The "condition-list" may contain multiple tests, separated by semicolons or
+  newlines. If the condition-list is already true, the loop never runs at all.
+
+19.3. Structure of "for"
+
+  In the first two examples below, "name" creates a new variable.
+
+  Iterate over a list of items:
+
+      for name; do
+          command-list;    # $name will be replaced by each parameter of
+          ...              # .. $* that was passed on the command line
+      done
+
+      for name in word $variable ...; do
+          command-list;    # Here, $name is replaced by each term after "in".
+          ...              # If "word" has shell wildcards (e.g., "tp*"),
+      done                 # expand to match filenames in the current folder.
+
+  Iterate over a math expression until "expr2" resolves to zero or false. Note
+  the use of (( double parens )) to indicate a math expression.
+
+      for (( expr1; expr2; expr3 ))
+      do
+          command-list;
+          ...
+      done
+
+  A typical example of the "for" command might be this. To work, we need
+  $max_files to be set somewhere earlier in the script. The dollar sign for
+  $max_files is not needed in (( math-expressions )).
+
+      for (( n=1; n < max_files; n++ ))
+
+  Sample one-line form:
+
+      for w in host username region date; do echo "Please list the $w"; done
+
+      for f in c*; do echo "File $f has $(wc -l < $f) lines"; done
+
+19.4. Loop control commands
+
+  These commands are used for "for", "while", "until", or "select" loops.
+
+      break [N] - Use "break" alone to exit the current loop. For nested
+      loops, use "break" and a number to exit the Nth enclosing loop.
+
+      continue [N] - Use "continue" alone to restart the next iteration of the
+      current loop, or "continue N" to restart from the Nth enclosing loop.
+      Use "continue" in bash or ksh just like "next" in Perl.
+
+  In awk, "continue" restarts the next iteration of "for", "while", and "do"
+  loops, while "next" fetches the next input record (e.g., the next line from
+  the file) and then goes to the top of the loop.
+
+
+20. Condition testing: if/else/fi and case/esac
+
+  Both "if" and "case" end with the same word reversed, "fi" and "esac".
+
+20.1. Structure of "if/fi"
+
+      if [[ test-condition ]]; then
+          command_1
+          command_2; ...
+      elif [[ test-condition ]]; then
+          command_3; ...
+      else
+          default_commands
+      fi
+
+  Tests for mathematical values may use the math construct (( ... )), below:
+
+      if (( math test )); then
+          command_1
+          command_2; ...
+      fi
+
+  We often test the exit status of the previous command. The exit code of the
+  last command is stored in the variable $?. Check it like this:
+
+      if [[ $? -eq 0 ]]; then     # NB: use "-eq" inside of [[...]], not "=="
+          echo Success!
+      fi
+
+      if (( $? > 0 )); then
+         echo Failure!
+      fi
+
+  The "if" construct does not need to explicitly use the $? variable.
+
+  If "if" is followed by a command line, the command line is executed and its
+  exit status is tested for success or failure. In the example below, if egrep
+  finds the pattern, it returns 0, which is interpreted as "true" or "success"
+  by the shell. Note that grep has an option for -q (quiet), which suppresses
+  output and returns only the exit code:
+
+      # $time should look like "12:34" or "12:34:56"
+      if echo "$time" | egrep -q '^[0-2][0-9]:[0-5][0-9](:[0-5][0-9])?$'
+      then
+          if (( 10#${hour} > 23 )); then
+              # In a math context, '09' will be interpreted as an invalid
+              # octal value. The '10#' prefix forces the ${hour} variable
+              # to be interpreted as a decimal (base 10) number.
+              echo "ERROR: The hour ($hour) must be 00-23. Quitting ..."
+              exit 1
+          fi
+
+          if ( ! expr "$secs" : '[0-5][0-9]' > /dev/null ); then
+              # If the seconds is missing, silently set it
+              secs='00'
+          fi
+      else
+          echo The time does not look like "12:34" or "12:34:56".
+      fi
+
+20.2. Structure of "case/esac"
+
+      case $variable in
+          pattern_1 )   command_1      # patterns have implied ^ and $ anchors
+                        command_2 ...
+                        ;;
+          patt2|patt3 ) command_3 ...  # pipes may separate multiple patterns
+                        ;;
+          pattern_4 )   # do nothing
+                        ;;
+          * )           # matches all other values
+                        Commands for default or errors
+                        ;;
+      esac
+
+  The $variable on the first line is not being DEFINED for "case", but is
+  being EXAMINED by "case". Thus, it needs a dollar sign and must be defined
+  elsewhere. It may also be $1, $2, $3, etc., representing either script
+  parameters or arguments to a function.
+
+  "case" uses double-semicolons to separate options. They act like "break"
+  does in loops: no further testing is done on the patterns.
+
+
+21. Ternary operators
+
+  The ternary operator is a concise, three-element syntax of (a?b:c), meaning,
+  if "a" is true, return "b"; else, return "c". Bash and ksh permit ternary
+  operators only inside math $((statements)) or math ((tests)), like so:
+
+      # bash variables must be integers; ksh also supports floating point
+      num=$(( a + b == c ? d : e ))
+
+  Neither bash nor ksh supports ternary syntax inside [[pattern tests]].
+  However, this one-line command is pretty close:
+
+      # test can use shell globs or extended pattern matching
+      var=$( [[ "MATCHED" = *TC* ]] && echo "OK" || echo "failed" )
+
+  expr can return a matching string, but is not a true three-part test. The
+  built-in test functions of the shell are much faster than expr.
+
+      # expr uses basic regular expressions, not shell globs
+      var=$( expr "MATCHED" : ".*\(TC\)" \| "failed" )
+
+
+22. Redirection
+
+22.1. Basic redirection
+
+  To redirect stdout to stderr, use ">&2" or "1>&2". For example:
+
+      echo "ERROR: Program failed on line $((LINENO - 2))" >&2
+
+  Use ">file 2>&1" IN THAT ORDER to redirect both stdout and stderr to file.
+  DO NOT use "2>&1 >file". This sends stderr to console (current location of
+  stdout) and redirects only stdout to file.
+
+  Redirection arrows (">", "<", and variants) can legally occur ANYWHERE ON
+  THE LINE. All of the following are valid syntax for creating a new file:
+
+      cat >outfile <<HERE-DOC
+      cat <<HERE-DOC >outfile
+      >outfile cat <<HERE-DOC
+      <<HERE-DOC >outfile cat
+
+  Redirection is parsed left-to-right (so order is important, as above), and
+  redirection is parsed before anything else, which is why "/bin/foo >output"
+  creates an empty file, even if "/bin/foo" does not exist.
+
+      ">"   overwrites an existing file, or creates a new file
+      ">>"  appends to an existing file, or creates a new file
+
+      "<"   says input comes from a filename
+      "<<"  says input comes from a here-document, up until a LABEL
+      "<<<" says input comes from the following string
+
+  Bash supports "<<<", as does ksh93m+ and later. This syntax avoid pipes and
+  echo statements. Example:
+
+      echo $variable | sed ':a; $!N; $!ba; s/\n/:/g'   # ksh or bash
+      sed ':a; $!N; $!ba; s/\n/:/g' <<< $variable      # bash or ksh93m+
+
+  For the curious, the above sed script expects $variable to contain multiple
+  lines. It slurps all the lines into the sed pattern space, changes all the
+  newlines to colons, and then prints one long line.
+
+  Finally, "exec 1>/tmp/stdout.log" redirects standard output from any source
+  to the specified file for the rest of the script, and "exec 2>/tmp/err.log"
+  likewise redirects standard error to the specified destination from that
+  point forward.
+
+22.2. Here-documents
+
+  Avoid putting "echo" and >>redirection commands on each line:
+
+      echo "Personal  name: $NAME"  > file
+      echo "Approximate pi: $(echo 'scale=6; 355 / 113' | bc)" >> file
+      date +"Today is %F at %T" >> file
+
+  Here-documents reduce the noise by using "cat" and an "<<INPUT_LABEL".
+  Output redirection arrows (if any) appear only once.
+
+      cat <<-END_HERE > file
+            Personal  name: $NAME
+            Approximate pi: $(echo 'scale=6; 355 / 113' | bc)
+            `date +"Today is %F at %T"`
+      END_HERE
+
+  Labels can contain symbols. Putting the label in single or double quotes
+  will permit indenting it, but this will disable $variable interpolation,
+  `backtick` and $((arithmetic)) expansion. However, the syntax "<<-LABEL"
+  allows one or more TABs to occur before any line and before the label.
+  Leading tabs will be deleted when the line is printed, and $variable,
+  `backtick`, and other expansions will still work.
+
+   Here-documents can be assigned to a variable:
+
+      var=$(cat <<EOT
+         Close the parentheses
+         after the ending label.
+      EOT
+      )
+
+
+23. Inserting files or lines into variables
+
+  Read or slurp the contents of a whole file into a variable:
+
+      var1=$(cat file)    # less efficient, but more obvious
+      var2=$(< file)      # faster and more efficient
+
+  Trailing newlines at the end of the file are discarded with either method,
+  but newlines at the top or within the file are retained. How double quotes
+  are used determines whether embedded newlines are displayed.
+
+      echo Show $var1     # multiple embedded newlines display as 1 space
+      echo "Show $var1"   # all newlines display as originally stored
+
+  Select individual lines using head, tail, grep, egrep, or sed.
+
+      var3=$(head -2 file)                 # get the top 2 lines
+      var4=$(tail -3 file)                 # get the bottom 3 lines
+      var5=$(egrep '^reg(exp)?\b' file)    # match regular expressions
+      var6=$(sed -n '2p; 4p; 7,15p' file)  # get lines #2, #4, and #7 to #15
+
+
+24. Inserting filenames into variables
+
+  Multiple filenames can be captured all at once, becoming individual elements
+  of an array. The process is easy in bash.
+
+      # Get all filenames in the directory beginning with "a" or "t"
+      list=( a* t* )   # instantly creates the array "list"
+
+      # Loop through each index number and print the filename
+      for i in "${!list[@]}"
+          do echo "Index is $i, filename is ${list[$i]}"
+      done
+
+  In ksh, predeclare the array name. Add "set -A list" to the top.
+
+
+25. Aliases
+
+  Aliases are used to create multiple names for a program with parameters, or
+  to preempt execution of a built-in command. In order of execution, the shell
+  seeks: aliases, functions, built-in commands, and external commands. Aliases
+  can contain multiple commands, handle implied parameters, and are declared
+  like variables:
+
+      alias lt='/bin/ls -ltAF --color=auto'
+      alias trim='/bin/sed "s/^[[:space:]]\+//; s/[[:space:]]\+$//;" '
+
+  BEWARE: Within ksh scripts, aliases are enabled as soon as they are defined.
+  Within bash scripts, aliases are DISABLED even if they are defined in the
+  script(!) and must be enabled by setting the "shopt" command on a SEPARATE
+  line. Example:
+
+      if [[ `uname` = "SunOS" ]]; then
+          alias grep=/usr/xpg4/bin/grep
+          shopt -s expand_aliases          # needed only for bash scripts
+      fi
+
+  The "shopt" directive is not needed for interactive or login shells. Aliases
+  are easier to write but not as flexible or powerful as functions.
+
+
+26. Functions
+
+  Though it's tempting to call things like ${FOO:1:3} or ${BAR,,} "functions",
+  since they emit a modified form of the input variables, bash and ksh do not
+  call them functions. They call them "parameter expansions" or "built-ins".
+
+  Functions, also called "shell functions", are code blocks or subroutines
+  written by the user. They can run commands, echo strings, and change global
+  variables. Functions should be defined before they are referenced.
+
+  If a function has the same name as a script or an executable on the PATH,
+  the function will take precedence. This is one reason that calls to shell
+  scripts should always be prefixed with the "/full/path/name".
+
+26.1. List all functions
+
+  List all currently defined function names, omitting definitions:
+
+      typeset -F              # bash; "declare -F" is an alias
+      typeset +F              # ksh
+      set | awk '$2 = "()"'   # either bash or ksh
+
+  This will show many functions whose name begins with one or two underscores.
+  These are "private" function names used by parent functions in system
+  startup scripts and initialization. To omit any names that start with an
+  underscore, modify the line selector in awk:
+
+      set | awk '$2 = "()" && $1 !~ /^_/'   # or '... && $1 ~ /^[^_]/'
+
+  To list all currently defined functions, including definitions:
+
+      typeset -f                # bash or ksh
+      set | sed '/^[^= ]\+=/d'  # delete all variable assignments
+
+  The "set" command by itself displays both variable and function definitions.
+  Pipe the output through sed (or grep -v) to delete the variable definitions.
+
+26.2. Writing functions
+
+  Inside functions, bash and ksh will create local variables if the variable
+  name (or "variable=assignment") is prefixed with "typeset". This avoids
+  altering globals of the same name. Otherwise, assignments to variables in
+  the function will persist outside the function. In a bash function,
+  "declare" and "local" with no switches work just like "typeset".
+
+  Functions are written in 2 formats. Either one will work fine.
+
+      function FUNCTION_NAME {    # the keyword "function", no parentheses
+          command-list ...;
+      }
+
+      FUNCTION_NAME () {          # with parentheses, no previous keyword
+          command-list ...;
+      }
+
+  Functions can be exported to subshells (child shells) by putting the command
+  "typeset -fx FUNCTION_NAME" in the parent script, but if doing this, child
+  scripts must NOT begin with a shebang line (like "#!/bin/ksh"), because it
+  will hide the exported functions. Put a single colon ":" on the first line,
+  and add a comment to future maintainers to explain why the command
+  interpreter was omitted.
+
+  Inside a function, $# becomes the number of parameters passed to it; $0
+  represents the function name; $1, $2, $3, etc. are the parameters passed to
+  the function; and $@ and $* become lists of those parameters. (Quoted "$@"
+  will resolve to separate arguments, each double-quoted, while quoted "$*"
+  will resolve to a string where the arguments are separated by the first
+  character of $IFS, which is usually space but which can be changed to
+  something else.) All these symbols are restored to their previous values
+  when the function ends.
+
+26.3. Using functions
+
+  When using or calling a function, pass arguments as space-separated values.
+  Do not wrap the arguments in parentheses after the function name, separated
+  by commas, as you would do in awk or perl.
+
+  If the function is not assigning something to a variable, use it as is. Do
+  not wrap it in `backticks` or $(command_substitution). If the function is
+  used to define a variable, then use $(command_substitution).
+
+      # "usage" and "count_lines" are defined functions in this example
+      usage                         # print to screen, $(...) not needed
+      total=$(count_lines $myfile)  # assign to variable, use $(...) here
+
+
+27. Exit codes, return, and hang up
+
+27.1. Exit code logic
+
+  Exit codes are variables returned to the system (the shell), not the
+  console. They must be evaluated immediately, because the very next command
+  will overwrite them.
+
+  Exit codes range from 0 to 255, and then roll over (i.e., exit 256 == 0,
+  exit 257 == 1, exit 258 == 2, etc.). Exit codes with negative numbers are
+  interpreted as follows: exit -1 == 255, exit -2 == 254, etc.
+
+  To the shell, an exit value of 0 indicates success (true), while a non-zero
+  exit code often (but not always) indicates failure (false). This applies to
+  conditional execution operators like "&&" (execute if the preceding command
+  returned true) and "||" (execute if the preceding command returned false).
+  The following code illustrates this:
+
+      $ ksh -c 'exit 0' && echo "success" || echo "failure"
+      success
+      $ ksh -c 'exit 1' && echo "success" || echo "failure"
+      failure
+
+  In most other languages (such as awk, perl, PHP, or python), zero indicates
+  false, while a positive number indicates true.
+
+      $ perl -le '
+      > if ( 0 ) {print "success"} else {print "failure"};
+      > if ( 1 ) {print "success"} else {print "failure"};
+      > '
+      failure
+      success
+
+  Finally, not all non-zero exit codes indicate program "failure": grep, cmp,
+  and diff all return 1 under normal conditions (i.e., pattern match could not
+  be found, or input files differ).
+
+27.2. return vs. exit
+
+  Functions exit with a status code, where 0 == success and non-zero is
+  failure. Inside a function, "return" by itself resolves "return 0": the
+  function quits with a success code and the script body resumes processing.
+  "return N" will return to the script body with the indicated failure code.
+  If anything else follows the "return" command, it needs to resolve to an
+  integer between 0 and 255.
+
+  If a function has no "return" statement, it exits with the status of the
+  last command it executes. $? applies to functions as well as to commands.
+  That is, if you run a function and use $? immediately after in the next
+  line, it will contain the exit status of the function.
+
+  "exit" or "exit N" always halts the entire script. Outside of a function,
+  "return" is a synonym for "exit" and will halt the script.
+
+27.3. nohup
+
+  "nohup" dates to the earliest days of Unix, when logins were done through a
+  phone modem. At logout, the modem "hung up" the phone. The signal name HUP
+  is short for "hang up," which occurs when the connection closes. Normally
+  when a user logs off, their login shell and all currently running child
+  processes are gracefully closed and terminated.
+
+  The "nohup" command (for "no hangup") allows processes to continue running
+  even after the user logs out, such as a printing process or a backup that
+  will take hours to complete. Rather than force users to be logged in all
+  night, "nohup" lets the program continue. All messages that would be sent to
+  standard output (stdout) or standard error (stderr) are sent to a disk file,
+  "nohup.out", in the current working directory. The user can review the file
+  after logging back in the next day.
+
+  "nohup" is followed by the command name, any parameters or arguments, and
+  optional redirection to send output to a different file. "nohup" should be
+  followed by a trailing ampersand "&" to run the command in the background.
+  If the ampersand were omitted, the command would run in the foreground, and
+  you couldn't log off until the command finished.
+
+  "nohup" is only useful for scripts which might be executed by a logged-in
+  user. If the script is executed by cron or Control-M, bash or ksh are called
+  as non-interactive shells without login/logout procedures, so there is no
+  logout action to worry about. If "nohup" *does* appear in a shell script,
+  consider following the "nohup" command line with a separate "wait" command
+  to avoid possibly creating zombie or orphan processes. Do not use "nohup"
+  twice in the same script without redirecting, otherwise there is strong risk
+  of blending the output of two commands into the same "nohup.out" file.
+
+
+28. Date calculation and manipulation
+
+  The GNU "date" command has many features for formatting and calculating
+  dates, times, and relative dates. It can also set the system date on the
+  host system. Run "info date" for details. These options are useful:
+
+      [none]  # as "Wed 12 Jul 2023 10:11:40 PM EDT"  (use local TZ setting)
+      -R      # as "Wed 12 Jul 2023 22:11:40 PM -0400" (RFC mail)
+      -u      # as "Thu 13 Jul 2023 02:11:40 AM UTC"   (UTC standard)
+      -I      # as "2023-07-12" (ISO date of YYYY-MM-DD, same as +"%F")
+
+      -d, --date='STRING'   # display time described by STRING, not now
+      -f, --file=FILENAME   # print each line of file using FORMAT strings
+      +'FORMAT'             # use special %elements for printing dates
+
+  The STRING in --date can use specific dates like "1996-09-03", but can also
+  accept input in epoch seconds. It can display or use relative dates.
+
+      --date='1973-06-01 18:30 CDT' +'%s'  # given date/time, return epoch sec
+      --date="@107825400" -u               # given epoch sec, return UTC date
+
+      -d "yesterday"            # same as "-1 day"
+      -d "tomorrow"             # same as "+1 day" or "1 day"
+      -d "2 days ago" +%A       # return day-of-the week for given date
+      -d "-100 months" -I       # returns the full date 100 months ago
+      -d "Feb 19" +%j           # returns 050, the day-of-year
+      -d "7/4" +'%B %-d'        # returns "July 4" instead of "July 04"
+
+  The FORMAT string uses %-symbols to specify the names, abbreviations, and
+  numbers for days or months, day-of-week, day-of-year, week-of-year, quarter,
+  military time, time zone, time zone offset, tabs, newlines, and more. Type
+  "date --help" to see a list.
+
+  Beware of presumptions when moving by full months. For example, if today is
+  March 31 and you ask for the date "1 month ago", you will receive bad output
+  since there is no February 31.
+
+  To determine the number of days between 2 arbitrary dates, convert each date
+  to epoch seconds, and subtract the older from the newer to get the total
+  number of seconds between the two dates. Then divide that number by 86,400
+  (the number of seconds in one day). It's a 3-line shell script:
+
+      older=$(date -d "2022-04-20" +%s)    # returns seconds since 1970-01-01
+      newer=$(date -d "2023-07-13" +%s)    # must be a larger number
+      expr \( $newer - $older \) / 86400   # 86400 seconds/day
+
+  The result is always an integer because each day starts at midnight.
+
+
+29. eval
+
+  "eval" passes one or more arguments to the shell for execution and
+  evaluation in the current environment. Arguments are interpreted twice.
+
+  One use is to dereference variables, where one variable stores the name of a
+  different variable whose value is wanted. In PHP, these are called "variable
+  variables" and in Perl it is called "using a variable name as a variable."
+  Below is an example from the command line (note the '$' prompt):
+
+      $ USER=mike                        # usually defined at login
+      $ mike=bash                        # give mike a bash shell
+      $ shell=\${$USER}                  # set shell for the current user
+      $ echo User shell will be $shell   # test for interpolation
+      User shell will be ${mike}         # fails: only 1 level
+      $ eval shell=\${$USER}             # run "eval" on the assignment
+      $ echo User shell will be $shell   # run the same test again
+      User shell will be bash            # works!
+
+  The example above required 3 variables to run "eval" directly. Using
+  $(command_substitution), only 2 variables are necessary:
+
+      $ USER=mike              # usually defined at login
+      $ mike=bash
+      $ echo The shell for $USER will be $(eval "echo \${$USER}").
+      The shell for mike will be bash.
+
+  As an earlier section on "Variable dereferencing" showed, bash and ksh can
+  dereference variables without "eval":
+
+      echo The shell for $USER will be ${!USER}.
+
+  Sometimes "advanced commands" are used to accommodate poor strategy, where a
+  problem is better handled with associative arrays:
+
+      $ USER=mike              # usually defined at login
+      $ typeset -A shell       # declare an associative array
+      $ shell[mike]=bash       # add a key=value pair
+      $ echo The shell for $USER will be ${shell[$USER]}.
+      The shell for mike will be bash.
+
+
+30. exec
+
+  "exec" is an advanced scripting command, not often used.
+
+  If "exec" is followed by an external command with optional arguments, the
+  script runs that command and quits. The parent shell script never returns at
+  all (unless "exec" ran the command in the background).
+
+  If "exec" is followed by redirection arrows (">", "<", and variants), it is
+  changing the file descriptors for greater efficiency. See the section on
+  "Basic redirection", above, for two examples.
+
+
+31. Math, numbers, and numeric tools
+
+31.1. expr
+
+  "expr" is a Unix tool for simple integer calculations and string extraction.
+  It was developed long before bash or ksh had ((math statements)), and often
+  is used for portability, when there is no knowledge of what shell version
+  will be available. All tokens or arguments must be separated by whitespace.
+
+  "expr" prints results to stdout and ALSO returns an exit code.
+
+  "expr" exits 0 (TRUE) if the expression evaluates non-zero, true, or non-null.
+  "expr" prints "0" and exits 1 (FALSE) if the expression evaluates zero or null.
+  "expr" exits 2 if there is a syntax error.
+
+  Arithmetic operators: +, -, *, /, % (modulus remainder). Multiply and divide
+  have precedence over add or subtract, or use parentheses to override. Parens
+  and asterisk must be backslash-quoted to prevent shell interpolation. expr
+  ignores leading zeroes, so "expr 52 - 050" returns 2, while the bash command
+  "echo $((52 - 050))" returns 12, since 050 is considered octal (base 8) due
+  to the leading zero.
+
+  Relational operators: =, !=, >, >=, <, <=. Arguments can also be words, so
+  "expr cat \< cats" will print 1 and exit 0 (TRUE). Note that comparing
+  characters or letters (e.g., "expr a \< A") depends on the locale variables.
+  Thus, if LC_ALL=C, then A-Z < a-z; but if LC_ALL=en_US, then a-z < A-Z. See
+  the section on "Sorting, ordering, and locale" for more info. "expr" cannot
+  compare or calculate floating (or decimal) point numbers.
+
+  Logical operators: | (OR), & (AND). Expects a number, string, or variable on
+  each side. With "|", expr prints the first non-zero or non-empty value. If
+  both values are zero or empty, expr will print 0 and exit 1. With "&", if
+  each value is non-zero/non-empty, expr prints arg1. Otherwise, it prints 0.
+  If any variables might be empty, put them in "double quotes." For example:
+
+      $ a= b=bbb; unset c              # $a is empty, $c is undefined
+      $ echo a is /${a-undef}/, b is /${b-undef}/, and c is /${c-undef}/.
+      a is //, b is /bbb/, and c is /undef/.
+      $ expr "$a" \| "$b"              # this will exit TRUE
+      bbb
+      $ expr "$a" \| "$c"              # this will exit FALSE
+      0
+      $ expr "$a" \| "$c" \| "$b"      # this will exit TRUE
+      bbb
+      $ expr "$b" \& "$c"              # this will exit FALSE
+      0
+
+  Pattern matching: ":" (colon). Expects two operands (arg1 : arg2), where
+  arg1 is typically a variable and arg2 is a regular expression (not a shell
+  glob) to match what is in "arg1". There is an implied "^" anchor at the
+  beginning of arg2, but no implied "$" anchor at the end of arg2.
+
+  expr regexes include \s and \S, \w and \W, \b and \B, \< and \> for (space
+  and non-space), (word and non-word), (word boundary and non-word boundary),
+  and (start-of-word and end-of-word). \+ and \? are supported, but \| is not.
+
+  If arg2 contains \(...\), the output is the portion of arg1 that matched. If
+  no parentheses appear, expr prints the number of characters that matched.
+
+      $ expr "looooong" : "oo"         # match fails due to beginning-of-line
+      0
+      $ expr "looooong" : ".oo"        # dot matches the first letter
+      3
+      $ expr "looooong" : ".o\+"       # no parens return the length
+      6
+      $ expr "looooong" : ".\(o\+\)"   # parentheses return the characters
+      ooooo
+
+  If parentheses are used, \1 matches the first set of parentheses, \2 matches
+  the second set, and so on, counting from the left. For example:
+
+      $ expr "aa bb cc dd cc x" : '.* \(..\).* \1'       # parens return the match
+      cc
+      $ expr "aa bb cc dd cc x" : '.* \(\(..\).* \1\)'   # nested parens, wrong
+      expr: Invalid back reference
+      $ expr "aa bb cc dd cc x" : '.* \(\(..\).* \2\)'   # nested parens, right
+      cc dd cc
+
+  The logical operator can be used to indicate failure:
+
+      $ expr "match this group" : '.*\(\<\w\+\)' \| "no match"
+      group
+
+  The GNU version of expr also contains substring, length, and index functions
+  in addition to those described above.
+
+31.2. Math expressions
+
+  Math operations and evaluation in the shell is far more efficient than using
+  expr or external tools. Set variables to be integers with typeset or declare.
+
+      typeset -i length=0 width=0      # requires both vars to be integers
+
+  Math is done with "let ..." or "((...))" which does two things: it performs
+  the operations in the "..." and then returns a Boolean TRUE/FALSE as to
+  whether the operation was true or could be successfully performed. E.g.,
+
+      if (( count > 19 ))              # test whether $count is greater than 19
+      if [[ $count -gt 19 ]]           # same test, using the [[...]] syntax
+
+      ((area = base * height))         # create $area and assign it this value
+      let area="base*height"           # another way to write this
+
+  "((...))" is a synonym for "let ...", except that "((...))" can accept only
+  one statement while "let ..." can accept more than one statement. Dollar
+  signs ($) can be omitted in "let ..." and "((...))" statements. To increment
+  a variable called $count, any of these will work:
+
+      (( ++count ))          # this test also performs a math operation
+      let count+=1
+      let count="count+1"
+
+  The increment operator "++" is supported only inside "((...))" statements,
+  and it can be used as a prefix or a postfix operator. In prefix notation as
+  "++num", 1 is added to $num and then the statement is evaluated. In postfix
+  notation as "num++", the statement is evaluated with the original value of
+  $num, and then 1 is added afterward.
+
+  Spaces can be used around the equal sign in "((...))", but NOT in "let ..."
+  statements. The <, >, and * characters do not need to be quoted inside
+  "((...))", but they MUST be quoted inside "let ..." statements. Wrap the
+  part after the equal sign in quotes.
+
+  Operators:  +, -, *, /, % for add, subtract, multiply, int divide, remainder
+  Comparison: <, <=, >, >=, ==, != have their usual meanings
+
+  Leading zeroes will cause numbers to be evaluated as octal digits, so force
+  them to be evaluated as decimal numbers by using 10#$varname instead.
+  Conversely, force evaluation as octal or hex by writing 8#$var or 16#$var.
+
+  Floating-point numbers are not supported for arithmetic, math calculations,
+  or comparisons in bash, ksh88, or mksh. They ARE supported in ksh93.
+
+  For floating-point arithmetic outside of ksh93, use perl, awk, or bc, but
+  beware of precision and rounding errors in awk and other tools. See
+  https://www.gnu.org/software/gawk/manual/html_node/Setting-precision.html
+
+31.3. Random numbers
+
+  In bash or ksh, $RANDOM will generate a random number between 0 and 32767.
+  Note that if this variable is unset or manually defined, it will lose its
+  special property of generating random numbers.
+
+  To generate a random number between 0 and 9, use ${RANDOM: -1}.
+
+  To eliminate zero, so the number is between 1 and 9, add a test:
+
+      r=${RANDOM: -1}
+      (( r )) || until (( r != 0 )); do r=${RANDOM: -1}; done
+      echo $r
+
+  For random numbers between 0 and 99, use ${RANDOM: -2}. For specific ranges,
+  use a test for illegal values. For example, for the range 0 to 36:
+
+      r=${RANDOM: -2}
+      (( r < 37 )) || until (( r < 37 )); do r=${RANDOM: -2}; done
+
+  If more specific ranges are desired, use the GNU "shuf" utility on most
+  Linux systems. This command generates 7 random numbers between 19 and 63:
+
+      shuf -n 7 -i 19-63
+
+
+32. printf and sprintf
+
+  bash and ksh93 have printf built-in, which may differ from /bin/printf.
+  printf can left-align, right-align, pad, and truncate strings or numbers.
+  Unlike "print", "\n" must be used for newlines. For every item preceded by
+  "%", there must be a corresponding parameter, string, or variable.
+
+      # bash or ksh: separate parameters with SPACES, do not use parens
+      # There are 3 parameters after the "expression"
+      printf "Str %s, int %i, float %.5f\n" $USER $(wc -l < $file) $pi
+
+      # awk or perl: separate params with COMMAS, parens are optional
+      printf("Line #% 3i [%i]: %s\n", NR, start - end, $0)        # awk
+      printf "%s, %s, %s, %s\n", $a ? $x : $y, @list[-3 .. -1];   # perl
+
+  The format options are "%[flags][width][.precision]format-as", where:
+
+      flags     : (-) flush left, (+) sign, (0,spc) padding, (#) base prefix
+      width     : width of the total field including any padding
+      precision : number of dec places if "f"; or max number of digits/chars
+      format-as : (s) str, (i) int, (f) float, (e,E) exponent, (o,x,d) bases
+
+  Sample cases for "Stephen" (string), 123 (integer), and 12345.789 (float):
+
+      |%s|     Include entire content                    |Stephen|
+      |%9s|    Flush right, 9 char width, pad with spc   |  Stephen|
+      |%9.5s|  Flush right, 9 char width, max 5 chars    |    Steph|
+      |%-9.6s| Flush left, 9 char width, max 6 chars     |Stephe   |
+      |%9i|    Converting string to integer returns 0    |        0|
+
+      |%i|     Prints integer in full                    |123|
+      |%7i|    Flush right, pad with spaces              |    123|
+      |%07i|   Flush right, pad with zeroes              |0000123|
+      |%-7i|   Flush left, pad with spaces               |123    |
+      |%1.1i|  You cannot truncate an integer ...        |123|
+      |%1.1s|  ... but if 123 is a string, you can.      |1|
+
+      |%f|     Float shows 6 decimal places by default   |12345.789000|
+      |%.2f|   Using .precision enables rounding         |12345.79|
+      |%8.2f|  8-char wide, 2 decimal places (same)      |12345.79|
+      |%10.2f| Flush right, 10-char wide, pad with spc   |  12345.79|
+      |%+9.0f| Flush right, 9-chars, + sign, rounded     |   +12346|
+      |%-9.0f| Flush left, 9 chars, rounded, padded      |12346    |
+
+  printf can also convert from one base to another:
+
+      printf "%o" 64            # from base 10 (64) to octal
+      printf "%#o" 64           # from base 10 to octal, with leading "0"
+      printf "%x, %#x" 14 15    # from base 10 to hex, with leading "0x"
+      printf "%d" 064           # from octal (064) to base 10
+
+  Awk, perl, and new versions of printf support using "*" in place of the
+  numbers for width or precision. For each "*", include an extra parameter in
+  the parameter list following the formatting string.
+
+  There is no sprintf in bash or ksh. sprintf is a function in awk or perl to
+  format a string and assign it to a variable. To do something similar in
+  bash or ksh, use printf with $(command_substitution).
+
+      small_csv=sprintf("\"%-30s\",%i,%i", something, min, max)     # awk
+      small_csv="$(printf '"%-30s",%i,%i' "$something" $min $max)"  # bash
+
+  In awk, the formatting string must be wrapped in "double quotes". In bash
+  and perl, the formatting string can be wrapped in single or double quotes.
+
+
+33. Sorting, ordering, and locale
+
+  Environment variables affect the sorting order of many tools and programs,
+  including ls, awk, perl, sort, join, expr, and shell comparison. These
+  variables are jointly called the "locale". Run "locale" without any options
+  to display the current locale settings.
+
+  LC_ALL overrides LC_COLLATE overrides LANG (there are 8 primary locale
+  variables, but these three are most relevant). If "LC_ALL=C", sort does
+  (A,B,C,..,a,b,c) and high-bit characters come last. If "LC_ALL=en_US", sort
+  does (a,A,b,B,c,C,...) and diacritics come before lower-case letters.
+
+  LC_ALL can be redefined for any "sort". In the example below, the dot (.)
+  represents the high-bit octal characters \202 or \203:
+
+       $ LC_ALL=C sort <<< $' BY \n bY \n AD \n aD \n B\202 \n A\203 '
+        AD
+        A.
+        BY
+        B.
+        aD
+        bY
+
+       $ LC_ALL=en_US sort <<< $' BY \n bY \n AD \n aD \n B\202 \n A\203 '
+        A.
+        aD
+        AD
+        B.
+        bY
+        BY
+
+  Note: $'string' is a special quoting construct, not available in ksh88, but
+  supported in bash and ksh93 (called "ANSI C quoting").
+
+  $'string' expands escape sequences like \a, \b, \e, \n, \t, \OOO (octal),
+  \xHH (hex), \cX (control-X), etc., which are not expanded in 'single' or
+  "double" quoted strings. While "echo -e" expands such sequences, the context
+  does not always permit using "echo -e". The case above is one example.
+
+
+34. Comparison tools
+
+  "expr" and bash have built-in features to compare strings or integers.
+
+  "cmp" compares 2 files byte-by-byte. Its only goal is to see if they differ.
+  There is a switch to skip the first N bytes of each file before comparing.
+
+  "diff" compares 2 files line-by-line and displays differences in a standard
+  output format to show lines added, deleted, or changed.
+
+  "diff3" compares 3 files line-by-line, showing differences like diff does.
+
+  "sdiff" compares 2 files line-by-line, showing differences side-by-side.
+
+  "wdiff" compares 2 files word-by-word, not line-by-line. Output is shown
+  only when the words differ, not when the margins or line breaks change.
+
+  "colordiff" is a wrapper to colorize the output of diff.
+
+  "comm" compares 2 sorted files line-by-line. comm compares by the full line,
+  and prints lines unique to file1, lines unique to file2, and lines common to
+  both files. There are switches to skip any of these three outputs.
+
+  "join" compares 2 delimited files which have been sorted on a key field. If
+  the keys match, it is printed with remaining fields from each line. join has
+  options to change the delimiter, print certain fields, ignore case, and
+  also/only print unique keys or lines from either file.
+
+  "sort" filters one or many files which may have delimited fields. It creates
+  sorted output based on key fields, and can filter to show only unique keys.
+  Options are available to ignore case, handle dates or numbers, change
+  delimiters, ignore punctuation, and more.
+
+  "uniq" filters one file, which may have delimited fields and need not be
+  sorted. It prints unique lines, but can print only duplicate lines or keys,
+  count total occurrences, and skip the first N characters of a key field.
+
+
+35. Difference between awk and nawk
+
+  awk was released in 1977, nawk ("new awk") in 1985. nawk added user-defined
+  functions, gsub(), match(), system(), getline, vars ARGC, ARGV, and FNR,
+  ternary operators ("x?y:z"), multidimensional arrays, and the ability to
+  access command-line variables. gawk ("GNU awk") added still more variables
+  and features, and has switches allowing it to emulate awk77 or awk85.
+
+  On Linux, /bin/awk is gawk. On most Unix systems, /bin/awk is either nawk or
+  gawk. On Solaris, /bin/awk is awk77 while nawk is stored as /bin/nawk.
+
+  To determine which awk is installed, run this command:
+
+      $ awk -v a=awk85 'BEGIN{ print a }'
+
+  awk77 will issue a syntax error and abort. nawk or gawk will print the word
+  "awk85" and exit. gawk has an option switch to show the "--version".
+
+
+36. grep, sed, awk exit codes
+
+  grep exits 0 if the pattern matched anything, and exits 1 if the pattern
+  matched nothing.
+
+  sed and awk will exit 0 unless there is an error in the script, even if
+  there is no input.
+
+  grep, sed, and awk all exit non-zero if a filename is specified on the
+  command line but the file cannot be opened.
+
+
+37. Interactive sessions
+
+  Although this document is aimed at shell scripting, a few comments about
+  interactive operations should be helpful.
+
+37.1. Interactive start-up
+
+  All bash and ksh users will follow the process described earlier in the
+  section on "Start-up files". For interactive shells, include this:
+
+  If the shell is ksh or /bin/sh, it wil look for $ENV and try to execute it
+  before displaying a shell prompt. Typically, $ENV refers to a file with
+  aliases, functions, and environment variables needed for interactive use.
+
+  If bash is called as a login shell, nothing further will be done.
+
+  If bash is called as a non-login shell (e.g., if called from an already
+  running ksh or bash prompt), bash will try to run ~/.bashrc, if it exists.
+
+37.2. For root users
+
+  If sysadmins are logged in as root, they may need to run commands under a
+  user or service account. If those accounts set up environment variables,
+  these commands will fail unless they "su" to the account first.
+
+37.3. Customize the shell prompt
+
+  The prompt shown on each line of an interactive ksh or bash session is set
+  by the variable PS1, which can be modified. The variables PS2, PS3, and PS4
+  are for secondary, select, and debug prompts, and are rarely customized. PS1
+  is customized by using escape sequences (backslash strings), $variables, or
+  `backtick insertion`. This is usually done inside an init file such as
+  ~/.bashrc, but PS1 can be changed on the command line as well.
+
+  Static prompts show a prompt that usually doesn't change, such as the
+  username, hostname, or version of bash. Set them like this for bash:
+
+      PS1='\s-v\$ '               # default, prints "bash-{version num}$ "
+      PS1="$USER@$HOSTNAME \$ "   # uses shell variables
+      PS1='\u@\h [\s \v]\$ '      # escapes for user, host, shell, version
+      PS1='\e[35;1m\u@\h\e[0m \$' # displays "user@host" in purple chars
+
+  Dynamic prompts change to display the current path, date, time, background
+  jobs, or how many commands have been given. You can add color or make the
+  prompt take up two lines: one line to display the current directory and an
+  empty line for long command lines.
+
+      PS1='\e[32;1m$(pwd)\e[0m [\d, \A]\$ '  # current_dir [\date, \time]
+      PS1='[\w] [bkgd: \j] [cmd: \!] \$ '    # wkg_dir, backgd jobs, cmd number
+      PS1='\e[33m[\s-\v: \w]\e[0m\n\$ '      # embed a newline into the prompt
+
+  Consult the bash/ksh man pages or info pages to learn which escape sequences
+  and options can be used customize or colorize the shell prompt.
+
+  Do not export PS1, because backslash escapes for this variable are not
+  consistent among different shells. For example, suppose bash is your primary
+  shell and PS1 is exported. If you run ksh as a subshell, it will inherit PS1
+  from bash and the prompt may be unreadable. By not exporting PS1, ksh will
+  use a default value of PS1, which *will* be readable.
+
+
+38. Interactive menu systems
+
+  Simple menus for interactive use can be built using "echo" (or "printf") and
+  using the "read" command to put the response into a variable. However, it is
+  easier to build using "select". These commands are common:
+
+38.1. read
+
+  The "read" command is built-in for ksh and bash. It should be followed by
+  one or more names to create variables. "read" will attempt to read one line
+  from standard input. This is usually the console/keyboard, but redirection
+  can be used to read input from a disk file.
+
+  The built-in IFS variable (Input Field Separator) is a list of characters,
+  any of which can serve to delimit a field. By default, IFS has 3 characters
+  (space, tab, and newline), but it can be modified to include punctuation
+  marks like commas or colons.
+
+  If "read" is followed by (say) 4 variable names, the first 3 fields of the
+  input will go into the first 3 variables. All remaining fields will go into
+  the last variable. To loop through a CSV file which does not have embedded
+  commas, do this:
+
+      IFS=','
+      while read one two thr four
+      do
+          echo "1:[$one] 2:[$two] 3:[$thr] 4:[$four]"
+      done < testfile.csv
+
+  Input from the console is terminated by the Enter or Return key. However, if
+  the line ends with a backslash, "read" will add the next line to its input
+  buffer for field splitting. To disable backslash continuation, use the "-r"
+  switch after the "read" command.
+
+  If "read" is not followed by any variable name, the input goes into $REPLY.
+
+38.2. select
+
+  "select" creates a menu system for interactive choices. "select" can accept
+  wildcards and display a list of filenames that match the wildcard pattern.
+
+  The structure is "select var_name [in words]; do command-list; done". It is
+  never seen in scripts run by cron or Control-M. The $REPLY variable is
+  automatically created for "select" commands. Below is a sample usage:
+
+      PS3='Choose a number: '
+      select terminal in 'Givalt GL35a' 'Tsoris T-2000' 'Shande 531' \
+          'Vey VT99'
+      do
+        case $REPLY in
+          1 ) TERM=gl35a ;;
+          2 ) TERM=T2000 ;;
+          3 ) TERM=s531 ;;
+          4 ) TERM=vt99 ;;
+          * ) echo "Invalid choice, try again..." ;;
+        esac
+        if [[ -n $terminal ]]; then
+          echo "REPLY is $REPLY, terminal is $terminal, TERM is $TERM"
+          echo "Also, do something else here"
+          break
+        fi
+      done
+
+  The above script will print to the screen:
+
+      1) Givalt GL35a
+      2) Tsoris T-2000
+      3) Shande 531
+      4) Vey VT99
+      Choose a number: _
+
+  If the user types "4" followed by the Enter key, the script will print:
+
+      REPLY is 4, terminal is Vey VT99, TERM is vt99
+      Also, do something else here
+
+  PS3 contains the prompt that is used at the bottom of the menu display (not
+  the top).
+
+  It is common to see "case" in the body of the "do...done" loop to interpret
+  user selections.
+
+  The "break" command will exit the "do" loop of the select command.
+
+38.3. trap
+
+  "trap" is used to prevent users from manually exiting a menu system via
+  keyboard commands such as Control-C, Control-\, or other ways to obtain a
+  command-line prompt. Syntax:
+
+      trap "some;cmds" sig1 [sig2 ...]   # replace all signals with cmds
+      trap - sig1 [sig2 sig3 ...]        # reset signals to default values
+
+  The "commands" can be shell built-ins, functions, or scripts. They are often
+  empty strings ("") or the null command ":" to do nothing.
+
+  "trap" can also clean up temporary files when a script is interrupted. For
+  example:
+
+      trap "rm $file1; rm $file2; exit" SIGHUP SIGINT SIGTERM
+
+  The signals can be numbers or names. The list varies by operating system and
+  is available by typing "trap -l" or "kill -l" (lower-case L). Each signal
+  name begins with "SIG", as SIGHUP, SIGINT, SIGQUIT, etc., but with "trap",
+  you may optionally omit the SIG prefix and use HUP, INT, QUIT, etc., or
+  their lower-case equivalents. These 3 are universal:
+
+      Ctrl-C   INT  = interrupt
+      Ctrl-\   QUIT with core dump
+      Ctrl-Z   TSTP = terminal stop
+
+  Commands such as erase (del), eof (^D), stop (^S), start (^Q), and others
+  are controlled by the terminal driver, emulator, or shell. Note also that
+  user-created functions can have their own local traps that do not exist
+  outside the function call.
+
+  SIGTERM and SIGKILL can only be called using "kill -15" (or "kill" alone)
+  and "kill -9", respectively. Neither signal can be executed by keyboard
+  commands, even using stty. It is also impossible to trap a "kill -9"
+  (SIGKILL) command. This is by design in Unix, for security and safety.
+
+38.4. tput and stty
+
+  "tput" is part of the ncurses package. It is used to both query the terminal
+  and send ("put") characters, colors, or commands to the terminal. For more
+  info, see https://linuxcommand.org/lc3_adv_tput.php
+
+  "stty" is a standard Unix command to report on or change the tty terminal
+  line settings. Popular uses:
+
+      stty intr undef   # undefine the "interrupt" signal
+      stty quit undef   # undefine the "quit" signal
+      stty susp undef   # undefine the "terminal stop" signal
+      stty -isig        # disable the interrupt, quit, and suspend chars
+      stty -icanon      # disable the erase, kill, werase, and rprnt chars
+
+38.5. dialog
+
+  "dialog" is a popular tool that relies on ncurses, but is not installed by
+  default on Linux or Unix systems. It is used for creating input windows and
+  boxes for menu systems. See https://linuxcommand.org/lc3_adv_dialog.php
+
+38.6. expect
+
+  "expect" is a popular Unix tool to automate responses to programs normally
+  intended for interactive use. It was written in the Tcl programming language
+  by Don Libes in 1990 and is not present on all Unix systems.
+
+  A common use is to automate telnet, sftp, or ssh login sessions. It looks
+  for ("expects") a prompt string to be emitted at the terminal, and it sends
+  pre-written user strings in reply. It can query its host system for
+  variables, handle different responses, handle timeouts, and accept user
+  input for semi-automated, semi-interactive sessions.
+
+  The Perl module Expect.pm works much like "expect" and can be used where
+  installing "expect" is difficult or where the programmer prefers Perl to
+  Tcl. There is a similar module for Python programmers, named Pexpect,
+  supported for Python v3.3 and above.
+
+#-----[ end of "Essentials of Shell Scripting" ]-----

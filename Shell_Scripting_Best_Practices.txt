@@ -1,0 +1,1332 @@
+"Shell Scripting Best Practices"
+
+     by Eric Pement
+     2023-07-14 15:20:24 (UTC-0400)
+     version 3.13.0
+
+= PURPOSE =
+
+  This document recommends "best practices" for writing shell scripts. It
+  encourages readable, robust, maintainable code and discourages ineffective
+  practices in script writing.
+
+  See also: "Essentials of Shell Scripting" by Eric Pement
+
+
+1. bash and ksh
+
+1.1. Use bash or ksh
+
+  Shell scripts written in csh, tcsh, or other shells should be rewritten for
+  bash or ksh. There are 2 major versions of the Korn shell: ksh88 (installed
+  on most Solaris servers) and ksh93 (installed on most Linux servers). Either
+  version of ksh is acceptable.
+
+  For portability, write for ksh88. If ksh93 is needed, include a test at the
+  top to abort the script if running ksh88.
+
+  Avoid invoking plain /bin/sh (Bourne shell) because the Bourne shell lacks
+  modern ((arithmetic expressions)) and [[test expressions]]. Built-in
+  expressions run much more quickly on the native shell than the /bin/test or
+  /bin/expr executables.
+
+1.2. Include the interpreter line
+
+  Always put an interpreter at the top of the script. "#!/usr/bin/env bash"
+  will search the $PATH and use the first "bash" it finds. "#!/bin/bash" will
+  look for "bash" in the /bin directory and fail if it is not there.
+
+  Omit the interpreter if the script needs to inherit functions exported from
+  parent shells (via "typeset -fx"). In this case, put a lone colon ":" on the
+  first line, followed by a "#comment" to future maintainers, explaining that
+  omitting the shell interpreter is required by a parent script, and include
+  the full path to the parent script for reference.
+
+1.3. Quick debug with -v or -x options
+
+  During development, quickly debug the script by using the -v (verbose) or
+  the -x (xtrace) as an option switch after the command interpreter. E.g.,
+
+      #!/bin/ksh -x         # ksh or bash. Both shells support these switches
+
+  The -v switch will echo each command before running it. The -x switch is
+  more common. It expands all variables, performs command substitution, and
+  echos each expanded command to the console before executing it.
+
+  You don't even need to edit the shell script. Run bash or ksh from the
+  command line followed by "-x" or "-v", followed by the script name. This
+  will run the script in xtrace mode without changing its normal operation.
+
+1.4. Use ShellCheck
+
+  The free software utility ShellCheck gives warnings and suggestions for bash
+  shell scripts, and is helpful for novices. It can be installed locally or
+  scripts can be pasted and checked from its web site: https://shellcheck.net
+
+1.5. All scripts must have Unix line endings (LF, not CR+LF)
+
+  Make sure all files have Unix line endings. The Unix/Cygwin "file" utility
+  will show which files have Windows (CR+LF) line endings.
+
+1.6. Script version numbers should use Semantic Versioning
+
+  As the script undergoes revision, the version number assigned to each new
+  release should use Semantic Versioning as described at https://semver.org.
+
+  For documentation not tied to a versioned software item (such as this file),
+  changes that add, delete, or move main headings (1, 2, 3, ...) should
+  increment the Major version number. Changes to add, delete, or move
+  subheadings (1.1, 1.2, ...) should increment the Minor version number, and
+  changes only to body text are equivalent to Patch version changes.
+
+  Documentation for sofware releases should have the version number of the
+  document correspond to the software version it describes. To indicate
+  textual revision or corrrections, append lower-case letters to the last
+  digit. Thus, "3.1.5" (first version), "3.1.5a", "3.1.5b", etc.
+
+1.7. Further reading
+
+  For further reading on shell programming, see:
+
+  "Unix Power Tools, Third Edition" by Shelley Powers, Jerry Peek, Tim
+  O'Reilly, and Mike Loukides (Sebastapol, CA: O'Reilly Media, 2003),
+  especially chapters 35 to 37, pp. 698-784.
+
+  The "Shell Style Guide" used by Google is online at:
+  https://google.github.io/styleguide/shellguide.html
+
+  Bash FAQ by the current maintainer.
+  https://tiswww.case.edu/php/chet/bash/FAQ
+
+  Bash Guide : https://mywiki.wooledge.org/BashGuide
+
+  "Essentials of Shell Scripting" by Eric Pement
+
+
+2. Readability and maintenance
+
+2.1. Comment the script
+
+  At the top of the script, put a comment block with your name, the date, the
+  purpose of the script, and any requirements for it to run successfully.
+
+  Use comments to explain why a certain command was used or why an "easy"
+  solution was omitted, since a later developer may try to use the "easier"
+  technique and miss the reason you avoided it. Explain complex code, tricky
+  syntax, or any assumptions about the input or environment.
+
+  For complex transformations of input data, use comment lines to show the
+  typical input (before) and the intended output of the transformation.
+
+  If using git, mercurial, svn (subversion), or another source control tool,
+  use that tool to record the date/time of each change. Don't list every
+  single change made to the script within the script itself.
+
+2.2. Do not mix TABs and spaces for indentation
+
+  In a team, all members must agree whether to use TABs or spaces for
+  indentation. If editing existing files, determine the predecessor's use and
+  tab spacing and follow it.
+
+  If creating new files or if no standard is set, indent every 2 or 4 spaces
+  and document your policy somewhere.
+
+  Some editors set TAB stops every 8 columns; others default to every 4
+  columns (e.g., Visual Studio). Tab indentation is controlled within vi by
+  doing ":set autoindent" and ":set tabstop=4". In Emacs, set indentation 4
+  spaces by "M-x set-variable [RET] tab-width [RET] 4".
+
+  Both Emacs and vi can store default tab settings in their init files,
+  ".emacs" and ".exrc" (the vim init file is ".vimrc").
+
+  Emacs, vim, and some versions of vi support redefining tabs by special
+  comment lines in a file. In Emacs, file-specific settings are called "file
+  variables" or a "local variables list." File variables must occur on the
+  first or second line. A local variables list must begin near the end of the
+  file (specifically, less than 3000 chars from the end-of-file).
+
+  In vi/vim, variable controls are called "modeline" settings, and they must
+  occur within 5 lines of the top or bottom of the file. Modeline expansion
+  can be disabled or limited via the .vimrc file. Below is a sample use of
+  both controls. Place it on the 2nd line of a shell script:
+
+      # Emacs: -*- fill-column:78; tab-width:4; indent-tabs-mode:nil; -*-
+      #   vim: set tw=78 ai ts=4 sw=4 expandtab :
+      # Set line length to 78 chars, tab-width to 4 chars, TAB inserts spaces
+
+  Since irregular indentation can impede understanding what the script does,
+  normalize the indentation of existing scripts. That is, use all TABs or all
+  spaces at the beginning of each line. The code logic will be easier to read.
+
+  In Linux, the 'expand' utility can convert leading tabs to spaces in source
+  code without infringing on tab characters elsewhere in the code. Example:
+
+      # set TABs to 4 chars, and convert initial TABs (only) to spaces
+      expand -i -t 4 input_file >output_file
+
+2.3. Break long lines
+
+  Excessively long lines prevent legibility, hindering understanding and code
+  maintenance. Try to break lines longer than 80 characters, and definitely
+  break lines longer than 100 characters.
+
+  Long lines can be safely split by inserting a newline (RETURN) after "|" or
+  "||" or "&&", except when these characters are part of a quoted string. For
+  clarity, insert a #comment above the break to say that the line was split
+  for readability. Insert 2 spaces at the beginning of each secondary line to
+  further cue the reader of the line continuation.
+
+  Other long lines can be broken into multiple lines by inserting a backslash
+  "\" immediately followed by a newline. Inserting a backslash and newline
+  DOES NOT WORK if the backslash is inside 'single quotes' or if the backslash
+  follows a #comment symbol. Spaces before the backslash and indentation on
+  secondary lines differs with command lines and variable assignment.
+
+      # For long command lines, you may put spaces before the backslash and
+      # indent secondary, successive lines. They will collapse into 1 space.
+      LC_ALL=en_US.UTF-8 /bin/bash --posix -c   \
+        '/usr/local/bin/sample.sh -a ONE -b "two three" -c'
+
+      # For variable assignment, put no spaces before the backslash and add
+      # none on secondary lines. Insert breaks at logical boundaries.
+      PATH='/h/bin:/usr/local/bin:/usr/bin:/bin:/mingw64/bin'\
+      ':/c/Windows/system32:/c/Windows:/c/Windows/System32/Wbem'\
+      ':/c/Windows/System32/WindowsPowerShell/v1.0:/usr/bin/core_perl'
+
+      # For variable assignment, the "+=" operator may be used instead to
+      # append to a defined variable:
+      PATH='/h/bin:/usr/local/bin:/usr/bin:/bin:/mingw64/bin'
+      PATH+=':/c/Windows/system32:/c/Windows:/c/Windows/System32/Wbem'
+      PATH+=':/c/Windows/System32/WindowsPowerShell/v1.0:/usr/bin/core_perl'
+
+  sed, awk, and perl scripts can be made readable by wrapping the script in
+  'single quotes', but remember that single quotes prevent variable expansion.
+  Make long scripts readable by adding spaces and comments. E.g.,
+
+      perl -MText::Tabs -ne '       # require module Text::Tabs
+        $tabstop = 4;
+        ($a, $b) = /^(\s+)(.*)$/;   # put leading whitespace into $a
+        $a = expand $a;             # change only leading tabs/spaces
+        print "$a$b\n";
+      ' infile           > outfile
+
+  In the script above, $a and $b are perl variables, not shell variables.
+  Although it uses 6 lines, it is much easier to read than a one-line script.
+  A similar technique can be used for multi-line sed and awk scripts.
+
+  If a perl script needs internal apostrophes, use the single-quote operators
+  q(...), q{...}, etc., and remember that \x27 (hex) or \047 (octal) resolves
+  to an apostrophe. Perhaps better, perl has a command-line option to accept
+  embedding an UNMODIFIED perl script inside a shell script! Run the command
+  "perldoc perlrun" and search for the Command Line option for "-x".
+
+2.4. Avoid embedded control codes
+
+  Certain scripts contain embedded control codes, such as Ctrl-A (0x01). Some
+  text editors display this as "^A", which might be mistaken as a regex for
+  the start-of-line (^) followed by capital A. Please avoid this ambiguity.
+
+  Such a command might look like: 'grep "^A35=F" file' or 'tr "^A" "\n"'
+
+  SOLUTION #1. If the tool supports escape sequences for unprintable chars,
+  use that. POSIX awk supports \NNN for 1 to 3 octal digits [0-7], while GNU
+  awk also supports \xHH for 2 hex digits [0-F].
+
+  If the tool supports Perl-compatible regular expressions (PCRE), many escape
+  sequences are available: \oNNN, \x{HH} or \x{HHHH}, \cX (where X is a letter
+  A-Z). Character class [[:cntrl:]] matches decimal codes 0-31 and 127-159.
+  There are also POSIX escape sequences of the form \P{property-name}.
+
+      # Need to match Control-A immediately followed by '35=F'
+      grep -P '\x{01}35=F' file   # enable PCRE in GNU grep to match Ctrl-A
+      grep -P '\cA35=F' file      # alternate way to match the same code
+
+  SOLUTION #2. Rewrite the character as a shell variable and use "double
+  quotes" to expand the variable:
+
+      CTRL_A=$(print '\001')     # Control-A == hex 0x01 == octal \001
+      grep "${CTRL_A}35=F" file
+
+  SOLUTION #3. Insert a #comment line above the character, saying that an
+  embedded control code is on the next line.
+
+2.5. Use here-documents instead of multiple "echo" statements
+
+  Instead of repeated "echo" statements, each with redirection:
+
+      echo "First name: $FNAME"  > output
+      echo "Last name:  $LNAME" >> output
+      echo "City name:  $CITY"  >> output
+      echo "Phone num:  $PHONE" >> output
+
+  Use "cat" and a here-document. The output file is named only once. Variable
+  expansion and `backtick` interpolation are automatically enabled.
+
+      cat <<END_HERE >output
+          First name: $FNAME
+          Last name:  $LNAME
+          City name:  $CITY
+          Phone num:  $PHONE
+      END_HERE
+
+  The delimiter label ("END_HERE") can be words or punctuation marks. To turn
+  off variable/backtick expansion, quote the delimiter or prefix it with a
+  backslash. To strip leading TABs from the output, change "<<" to "<<-". Note
+  that this allows the 'END_HERE' to be tab-indented as well.
+
+
+3. Control-M readiness and robust programming
+
+3.1. Scripts should exit 0 on success and non-zero on failure
+
+  If the script ends successfully, it should exit 0. Syntax errors, missing
+  parameters, or other errors should cause the script to exit 1 or higher.
+
+  Monitoring scripts are an exception, as they are meant to run indefinitely
+  until manually stopped. Errors detected during monitoring can be conveyed to
+  monitoring tools such as Geneos or Netcool.
+
+  Do not use negative exit codes; the shell sees them as positive numbers.
+
+3.2. Collect errors with an error counter
+
+  A fatal error causes the script to halt immediately. A nonfatal error occurs
+  when a command fails without halting the script. Nonfatal errors can be
+  collected and counted this way:
+
+  Put "ERRORS=0", "EXIT_CODE=0", or something similar near the top of the
+  script. The name must not conflict with other variable names. If errors
+  occur during execution, increment the variable. E.g.,
+
+      /usr/local/bin/some_program
+      (($?)) && ((ERRORS += 1))       # increment only if failure
+
+  Normally, the exit status of a script is the exit code of the last command
+  in the script. If the script has multiple commands, you may want to end the
+  script with "exit $ERRORS". A non-zero value should trigger a "job failed"
+  status in Control-M or . The code will show the number of errors that occurred
+  during execution, not the status of the last command.
+
+  If it is REMOTELY possible that the number of errors might be as high as
+  256, avoid overflow errors. Exit codes evenly divisible by 256 (256, 512,
+  etc.) are interpreted as "exit 0". If a high number of errors is possible in
+  the script, exit this way:
+
+      # If $ERRORS is evenly divisible by 256, exit 255. Else, exit $ERRORS
+      (( ERRORS > 0 && ERRORS % 256 == 0 )) && exit 255
+      exit $ERRORS
+
+3.3. Show which commands failed
+
+  Some commands can fail (like opening a database or using "mkdir"), while
+  others almost never fail (like creating a variable or running "echo").
+
+  Show where failures occurred by:
+    (1) echoing the command name to stdout, stderr, or to a log file; or
+    (2) echoing the line number in the script.
+
+  Here is one way to do both. The built-in variable $LINENO is available for
+  both ksh and bash, and it can be used in arithmetic expansions via $((...))
+  or $(expr), for bash/ksh93 and ksh88, respectively. The angle brackets ">&2"
+  redirect standard output (stdout) to standard error (stderr) instead.
+
+      /usr/local/bin/pgm parameters
+      ERR=$?
+      if (( ERR )); then
+        echo "Failed on line $(( LINENO-3 )) with code $ERR"     >&2  # bash
+        echo "Failed on line $(expr $LINENO - 3) with code $ERR" >&2  # ksh88
+        (( TOTAL_ERRORS += 1 ))
+      fi
+
+  Don't be tempted to optimize the code above by removing line #2 and
+  replacing "if (( ERR ))" with "if (( $? ))". The "$?" variable is extremely
+  fragile, and it will disappear after line #3. Save "$?" by immediately
+  storing it in $ERR.
+
+  Do not check exit codes after commands that CANNOT fail, like "echo". Do not
+  check exit codes after commands run in the background (ended with "&"),
+  because the exit code shows whether a background command was successfully
+  spawned, not how the command itself ended.
+
+3.4. Confirm that required files and directories exist
+
+  Confirm that required files or directories exist before using them, unless
+  the application creates missing files or directories if needed.
+
+      # If file does not exist, create a new, empty file
+      [[ -f $my_file ]] || : > $my_file       # one way
+      [[ ! -f $my_file ]] && touch $my_file   # another way
+
+      # If directory is not readable, create it, or emit error and exit
+      mkdir -p $my_dir || { echo "ERROR: Cannot create $my_dir"; exit 1; }
+
+  Note that the -p switch in "mkdir" saves having to test for directory
+  existence first, and also supports creating several/directories/at/once.
+
+3.5. Confirm that sourced scripts are readable
+
+  A "sourced script" runs in the current environment, usually setting up
+  variables needed later. Before sourcing a file, see if it is readable:
+
+      [[ -r $HOME/env.ksh ]] ||
+        { echo "ERROR: Cannot read $HOME/env.ksh"; exit 1; }
+      . $HOME/env.ksh
+
+  Or, depending on the requirements, emit a warning and continue.
+
+  Check the internal logic carefully. If an environment file is not readable,
+  undefined variables will be replaced by the empty string ("") and the script
+  will probably fail at multiple points. Therefore, we strongly advise testing
+  that sourced scripts are readable before using them.
+
+  The -r (readable) test is more useful than -e or -f, which tests that a file
+  exists or is a regular file.
+
+  Note that a sourced script does NOT need to be executable, because files can
+  be successfully sourced without execute permission. Thus, checking for -x
+  (execute) permission is unnecessary.
+
+3.6. Confirm that external scripts exit properly
+
+  Do not assume that external scripts return valid exit codes. For example:
+
+      # How do we know that "this_script" can end with an error?
+      /path/to/this_script
+      (( $? )) && (( ERROR_COUNT += 1 ))
+
+  It does no good to save an exit code if "this_script" ALWAYS exits 0 no
+  matter what. Inspect the contents of any internal scripts to confirm that
+  they work reliably.
+
+  We can be more lenient with "sourced scripts". Sourced scripts usually set
+  variables and do no more, so we don't check their exit codes. If they do
+  more than set variables, check their exit codes also.
+
+  You may want to confirm that expected variables are populated:
+
+      source /path/to/my.env
+      [[ -z $DBASE ]] &&
+        { echo "FATAL ERROR: variable DBASE is empty!" >&2; exit 1; }
+
+3.7. Confirm that other commands finish successfully
+
+  Note that built-in commands or compiled binaries (like mv, cp, sqlplus,
+  mailx, perl, sftp, etc.) may fail for many different reasons. Be proactive
+  in checking that each critical step succeeds. In some cases, you may need to
+  abort the script instead of passing to the next command.
+
+      cp $FILE1 tempfile
+      (( $? )) && (( ERROR_COUNT += 1 ))   # in case $FILE1 does not exist
+
+      mailx -s "Subject header" $RECIPIENT_LIST < results.txt
+      (( $? )) && (( ERROR_COUNT += 1 ))   # did mailx succeed?
+
+3.8. Check all input parameters
+
+  Confirm that all required parameters ($1, $2, $3, etc.) contain valid
+  values. For this task, a case/esac statement is easier to read and to write
+  than a long series of if/elif/else statements.
+
+3.9. Errors do not propagate through pipelines
+
+  In a pipeline, the exit code comes SOLELY from the last command in the
+  pipeline. Consider the following example:
+
+      sqlplus @sqlplus_script | grep "this" | sed "/that/d" > $LOGFILE
+
+  This command will exit 0, even if sqlplus does not exist. One solution is to
+  rewrite the script to check the success of each component.
+
+  For bash scripts, $PIPESTATUS is a volatile array storing the exit status of
+  each command in the pipeline. Loop through each array element like so:
+
+      command1 | command2 "args" | command3 "args" | command4 "args"
+      for i in ${PIPESTATUS[*]}; do
+        (($i)) && ((ERRORS += 1))   # count the total number of errors
+      done
+
+  If using bash or ksh93g (or later), errors can be made to pass through
+  pipelines. To enable it, put "set -o pipefail" at the top of the script. The
+  $? variable will return the value of the last failed command in a pipeline,
+  or 0 if nothing failed.
+
+
+4. Convenience for interactive sessions
+
+4.1. Run shell scripts from any directory
+
+  To run a shell script from any directory in Unix, specify the
+  "/full/path/to/the/shell_script" each time it is invoked. However, typing
+  the "/full/path/each/time" can get cumbersome quickly.
+
+  It is convenient to put shell scripts in a directory already on the PATH,
+  such as ~/bin (where "~" stands for the HOME directory) or /usr/local/bin.
+  Both ~/bin and /usr/local/bin are often (but not always) included in the
+  PATH by default. Executable programs on the PATH can be run simply by
+  entering their names.
+
+  For interactive sessions, you may edit ~/.bash_profile or ~/.bashrc to alter
+  the PATH to include any directories whose contents should be available at
+  all times. If two directories have scripts of the same name, the one found
+  first in the PATH will be executed. Any shell scripts run in an interactive
+  session will inherit the new PATH when they execute.
+
+  However, unattended shell scripts run by cron or Control-M do *NOT* read
+  ~/.bash_profile or ~/.bashrc on startup, so the PATH will not be altered in
+  this case. For unattended scripts, choose one of these options:
+
+      Prefix the command with a local variable. For example:
+        PATH=/opt/my/scripts:$PATH /opt/bin/my_shell_script -wxyz
+
+      Inside each shell script, source a common environment file, e.g.,
+        source /opt/bin/default_vars
+
+      If using a modern version of cron, insert a variable near the top of the
+      crontab file, like "PATH=/opt/my/scripts:$PATH". It will be inherited by
+      all the cron commands below it.
+
+  You can also specify the "/full/path/to/the/shell_script" each time. Some
+  sysadmins prefer this for all non-interactive shell scripts.
+
+4.2. Use the TAB key to complete commands and filenames
+
+  Let the TAB key complete commands (e.g., script names) and filenames (as
+  parameters). This guarantees that the names will be spelled correctly the
+  first time, immediately. The longer the filename is, the more you will
+  appreciate using TAB instead of typing it out.
+
+  At a bash prompt, type a few letters at the beginning of the command line
+  and press the TAB key twice. (Try this with "bas". You should see base32,
+  base64, basename, bash, and probably some other commands.) The commands
+  displayed will come from every directory on the PATH. A single press of the
+  TAB key will complete the command as much as possible.
+
+  For older versions of the ksh shell (such as ksh88), TAB completion of
+  executable scripts is available by running "set -o emacs" from a ksh prompt.
+  For newer versions of ksh, TAB completion is enabled by default.
+
+  This applies to filenames in the current directory, not just to command
+  names on the path. In bash, TAB completion of filenames can be customized to
+  automatically exclude certain file extensions, so that certain files (e.g.,
+  "*.o" or "*.bak") never match.
+
+
+5. Efficiency
+
+5.1. Write efficient code
+
+  If a script uses more than 4 or 5 pipes to filter a block of data, review
+  the process being used to transform this data. Is it possible to do most of
+  the transformation in one (or a few) scripts in perl or awk or even sed?
+
+  For example, many coders invoke "grep", "grep -v", "tr", and "sed" when all
+  of these operations can be done in sed, including "tr".
+
+5.2. Processing files line-by-line
+
+  The fastest way to process files line-by-line uses file descriptors:
+
+      exec 4<&1                 # associate stdout with FD 4
+      exec 1> $OUTFILE          # redirect stdout to filename
+      #
+      while read line
+      do
+          something-to $line    # output is sent to stdout (now FD4)
+      done < $INFILE            # input file is redirected as new
+      #
+      exec 1<&4                 # restore stdout to FD1
+      exec 4>&-                 # close FD4
+
+  The following is the fastest method that does not use file descriptors:
+
+      while read line
+      do
+          something-to $line >> $OUTFILE
+      done < $INFILE
+
+  This method is slightly slower than the one above it:
+
+      for line in `cat $INFILE`
+      do
+          something-to $line >> $OUTFILE
+      done
+
+  The following is quite slow compared to the three above. Avoid it.
+
+      cat $INFILE | while read line
+      do
+          something-to $line >> $OUTFILE
+      done
+
+
+6. Things to avoid, beware of, or check
+
+6.1. Avoid script duplication, support code reuse
+
+  Avoid making multiple copies of the script where the only difference is a
+  single variable or an internal parameter. If the functionality is the same
+  except for a directory name or keyword, rewrite the script to accept
+  command-line parameters, switches, or environment variables.
+
+6.2. Avoid over-confirming required scripts and directories
+
+  Though we recommend confirming that scripts, directories, and files exist,
+  avoid "over-checking" for the same object. For example, if a certain script
+  is invoked several times, check for its existence only once (unless the
+  script might do something to make it disappear).
+
+6.3. Avoid a useless use of cat
+
+  The following is a typical "useless use of cat". It is "useless" for two
+  reasons: (1) No reason to invoke cat when sed accepts filenames; (2) The
+  pipeline construction prevents the detection of a missing file.
+
+      cat input_file | sed '1,10d'        # Avoid this
+
+  If "input_file" does not exist, cat cannot pass the error to sed. Rewrite
+  the command to use sed alone. (Same applies to "cat file | grep" as well.)
+
+      sed '1,10d' input_file              # Pass the filename as a parameter
+
+  When a filename is specified on the command line, if the file is missing,
+  the error will be captured in $?.
+
+  One exception to the "useless use of cat" occurs when the script is intended
+  to work as a filter, accepting input from either a disk file or from
+  standard input. In this case, the script will be written like this:
+
+      cat $1 | sed '1,10d'                # This is okay
+
+6.4. Avoid using -a in shell tests
+
+  The -a operator was used for [ tests ] under the Bourne shell, both to test
+  for file existence and also as a conjunction ("AND") operator. It is
+  deprecated in both ksh and bash, and should be avoided.
+
+6.5. Avoid misuse of export
+
+  The "export" command is needed only if a child subshell will be created, and
+  the subshell needs to see that variable. export is not needed simply to
+  create a new variable for the current script. The syntax is:
+
+      USER1="ben.franklin@example.com"
+      export USER1
+
+  or more simply:
+
+      export USER1="ben.franklin@example.com"
+
+  Do not add a dollar sign to the variable name! "export $VAR" is almost
+  certainly NOT what you want---unless you are planning to export a variable
+  whose name is the value of $VAR, and in that case, you should clearly
+  explain the intention with a few #comment lines.
+
+6.6. Beware of grepping process IDs
+
+  grep matches patterns anywhere on the line; forgetting this can cause
+  unintended matches. PIDs are numbers, usually from 3 to 5 digits long.
+  Suppose the PID is 123.
+
+  The command '/usr/bin/ps -ef | grep 123' will match anywhere on the line. It
+  might find 123 in any or all of these locations:
+
+      PID   process ID
+      PPID  parent process ID
+      CMD   anything in the command: version number, port number, etc.
+
+  "grep 123" will match things like 1231, 1232, 1238, 11231, version.1235,
+  release_12302014, etc.
+
+  Remember to use grep with the -w (whole-word) switch to prevent embedded
+  matches, and to match only particular fields, not any field.
+
+6.7. Beware of relying on log files to confirm successful execution
+
+  This could also be named *BEWARE OF DISK FULL ERRORS* because these two
+  situations often go together.
+
+  If log files are used to record program errors but the disk fills up, the
+  errors cannot be written to disk:
+
+      script1  >>logfile.txt 2>&1
+      # Suppose "script1" causes the disk to fill up and errors occur
+      # during "script2" ...
+      script2  >>logfile.txt 2>&1
+      ERRORS=`grep -c 'ERROR' logfile.txt`  # -c will count the total matches
+      echo "Exiting with $ERRORS errors."
+      exit $ERRORS
+
+  The above is an actual case where an application relied on log files to
+  determine job success. The script exited "0" (success), but the job actually
+  failed because the error messages could not be written to the disk.
+
+  The way to handle this is for "script1" and "script2" to each collect error
+  counts and pass those counts on exit. See the earlier section on "Confirm
+  that other commands finish successfully" for details. Below is a suggested
+  revision of this script:
+
+      script1  >>logfile.txt 2>&1
+      (( SCRIPT_ERRORS += $? ))
+      script2  >>logfile.txt 2>&1
+      (( SCRIPT_ERRORS += $? ))
+      #
+      LOG_ERRORS=`grep -c 'ERROR' logfile.txt`
+      #
+      if (( LOG_ERRORS > SCRIPT_ERRORS )); then
+          MAX_ERRS=$LOG_ERRORS
+      else
+          MAX_ERRS=$SCRIPT_ERRORS
+      fi
+      echo "Exiting with $MAX_ERRS errors."
+      exit $MAX_ERRS
+
+6.8. Beware of using ksh93 syntax under ksh88
+
+  A script written for ksh88 will usually run in ksh93, but a ksh93 script
+  will likely fail under ksh88. If your script requires ksh93, include a test
+  at the top to abort if ksh88 is detected. Use the increment operator to
+  check for any version of ksh93:
+
+      test=2
+      if (( ++test != 3 )); then
+          echo "ERROR: This script requires ksh93. Quitting ..." >&2
+          exit 1
+      fi
+
+  For ksh after 2008 (ksh93t or later), use the KSH_VERSION variable:
+
+      [[ "$KSH_VERSION" ]] || { echo "Requires ksh93t or later."; exit 1; }
+
+6.8.1. Arithmetic expansions $((...)) are not in ksh88.
+
+  Arithmetic EXPANSIONS $((...)) begin with a dollar sign "$", but arithmetic
+  EXPRESSIONS ((...)) do not. Arithmetic expressions are used in if statements
+  and tests. Arithmetic expansions are used for the right side of a variable
+  assignment, as in "X=$((Y+2))". If ksh88 is the default shell, use an
+  arithmetic expression instead, e.g., "(( X = Y+2 ))".
+
+6.8.2. Increment and decrement operators are not in ksh88.
+
+  The C-style increment and decrement operators, "++" and "--", are available
+  only for bash or ksh93. Note that "(( ++num == 5 ))" increments the variable
+  BEFORE comparing it with 5, while "(( num++ == 5 ))" compares $num with 5,
+  returns a result, and THEN increments the variable.
+
+  These operators are not enabled in ksh88. Use ((num += 1)) or ((num -= 1))
+  instead. For comparison, an additional command will be necessary.
+
+6.8.3. String concatenation with += is not in ksh88
+
+  ksh88 uses "+=" only for arithmetic expressions, e.g., ((x+=1)). ksh93 and
+  bash allow it to append a string to a variable, e.g., PATH+=":/var/tmp/bin".
+  Use this syntax for ksh88: PATH="$PATH:/var/tmp/bin.
+
+6.9. Check for duplicate processes
+
+  If a script runs at the start-of-day and initiates a process or service,
+  check to see if the process is already running before starting it. If a
+  service, process, or listener was started earlier and was accidentally
+  started a second time, there may be negative consequences to a restart.
+
+6.10. Check for unpaired quotes, backticks, and syntax errors
+
+  Use an editor with syntax highlighting to check for unpaired "double
+  quotes", 'single quotes', and `backticks`. A good syntax-aware editor will
+  also check for mismatched parentheses "()", brackets "[]", and braces "{}".
+
+6.11. Check for passwords in clear text
+
+  Storing password details in clear text is a security violation.
+
+      details="jobWidget/P@55w0rd@myOracle"      # Avoid this
+
+  At least, store them in an external file (e.g., "connect.sh"). The file
+  should be readable only by the app owner (i.e., "chmod 400 connect.sh").
+  Source the file and pass the variables to sqlplus from within the SQL
+  script, not as a command-line parameter to sqlplus. In other words:
+
+      if [[ ! -r /path/to/connect.sh ]]; then
+          echo "ERROR: Cannot read /path/to/connect.sh" >&2
+          exit 1
+      fi
+      . /path/to/connect.sh       # load $details into the current environment
+      #
+      sqlplus -S /nolog << END
+          connect $details;
+          @run_this_query.sql;
+          exit;
+      END
+      (( $? )) && (( ERRORS += 1 ))
+
+  For perl scripts, importing an external data file might look like this. Note
+  that ".connection.data" begins with a dot, and might contain several rows of
+  data for various connection instances:
+
+      my (@details, %data, $instance, $user, $pass, $db);
+      open (FH, "<", "/path/to/.connection.data")
+        or die "Cannot open /path/to/.connection.data: $!";
+      @details = <FH>;                     # slurp file into an array
+      close(FH);
+      foreach (@details) {
+          chomp;
+          next unless 4 == split /;/;      # require exactly 4 fields per line
+          ($instance,$user,$pass,$db) = split /;/, $_, 4;  # semicolon delim.
+          $data{$instance}{user}  = $user;                 # hash of hashes
+          $data{$instance}{pass}  = $pass;
+          $data{$instance}{dbase} = $db;
+      }
+      die "No connection data retrieved\n" unless scalar keys %data > 0;
+      # retrieve element values using $data{$instance}{user}, etc.
+
+  For additional security, the script visibility and connection details can be
+  obfuscated (this example presumes only a single line of connection data).
+
+  a. From a shell prompt, convert the clear text to Base64 encoding and put it
+  in an external file with a leading dot (e.g., ".auth"). The leading dot
+  hides it from normal display in /bin/ls.
+
+      $ echo "my_username/my_password@my_database_name" |
+        perl -MMIME::Base64 -pe '$_ = encode_base64($_)' > .auth
+
+      # If base64 is installed:
+      $ echo "my_username/my_password@my_database_name" | base64 > .auth
+
+      # More concisely, bash allows:
+      $ base64 <<<"my_username/my_password@my_database_name" > .auth
+
+  b. Run "chmod 400 .auth", so only the owner of the parent script can read
+  it. The file ".auth" will contain a one-line encoded string:
+
+      bXlfdXNlcm5hbWUvbXlfcGFzc3dvcmRAbXlfZGF0YWJhc2VfbmFtZQo=
+
+  c. In the parent script, decode the file.
+
+    Within a bash or ksh script:
+
+      details=$(base64 -d ./.auth)     # or else, use
+      details=$(perl -MMIME::Base64 -pe '$_=decode_base64($_)' ./.auth)
+
+    Within a perl script:
+
+      use MIME::Base64;
+      my $details = decode_base64(`cat ./.auth`);
+
+  The variable $details now contains the clear text connection information.
+  The advantage of this method is that the parent script does not contain the
+  password, not even in encoded form. Remember not to "export" the $details
+  variable. Also, obfuscation is not encryption and cannot be used to replace
+  encryption.
+
+6.12. Check for individual recipients of email messages
+
+  Alert messages should not be sent via mail to only one recipient. This is a
+  single point of failure because if the employee is not present to read the
+  mail or leaves the firm, no one else will receive the messages.
+
+  In Production and testing environments, mail should go to mailing lists.
+
+6.13. Check complex regular expressions
+
+  Review complex regular expressions, remembering how brackets "[]" and
+  parentheses "()" differ. This example shows a misuse of brackets:
+
+      egrep "[Z54:512|Z54:520|Z54:523|Z54:533|Z54:536|Z54:537|Z54:540]"
+
+  Square brackets create character sets, which match a single character. Pipes
+  do not signify alternate options in character sets. This regex will match
+  only 1 character, not a string of 7 chars, which was the original author's
+  intent. To fix the expression, omit the square brackets and use parentheses
+  to optimize the script:
+
+      egrep "Z54:5(12|20|23|33|36|37|40)"
+
+
+7. sed suggestions
+
+7.1. Combine multiple commands
+
+  Repeated piping to sed is inefficient:
+
+      sed 's/^foo/bar/g' file | sed 's/N12345/M67890/' | sed 's/^/ >> /'
+
+  It is more efficient to invoke sed once. Use semicolons to separate each
+  command. Note that we removed the /g flag from the first pattern, because an
+  ^anchored pattern can match only once.
+
+      sed 's/^foo/bar/; s/N12345/M67890/; s/^/ >> /' file
+
+7.2. Reduce noise by changing the delimiter
+
+  In sed, the substitution delimiter is the forward slash, "/". However, if
+  the slash occurs in the "find" or "replace" portion, this can result in a
+  great deal of noise, making the script hard to read:
+
+      # Change "/usr/local/bin" to "/export/home/app1/bin"
+      s/\/usr\/local\/bin\//\/export\/home\/app1\/bin\//g;   # a bad example
+
+  The "s" (substitution) command will accept nearly any other printable
+  character as a delimiter, so you may use a comma, pipe, exclamation mark or
+  some other symbol instead. Note that if you choose the pipe as a delimiter,
+  you cannot *also* use it as a metacharacter for alternation. Thus,
+
+      # Change "/usr/local/bin" to "/export/home/app1/bin"
+      s|/usr/local/bin/|/export/home/app1/bin/|g;            # try this,
+      s,/usr/local/bin/,/export/home/app1/bin/,g;            # or this
+
+  The slash is the default delimiter for matching a regular expression for a
+  "/line/" or a "/line/,/range/". Change it by prefixing the first occurrence
+  with a backslash. The "closing" delimiter does not need to be prefixed.
+  Thus,
+
+      # Reduce backslash quoting by using alternate delimiters
+      \@/opt/tools/@ s,/usr/local/bin/,/export/home/app1/bin/,g;
+
+7.3. Replace grep where possible
+
+  Often sed scripts pipe their output to grep to select certain lines, and
+  pipe those results back to sed for further transformation. However, sed can
+  easily locate lines that match (or do not match) a certain pattern.
+
+  If using sed with no switches:
+
+      /pattern1/!d;      # same as grep "pattern1"
+      /pattern2/d;       # same as grep -v "pattern2"
+
+  If using "sed -n":
+
+      /pattern3/p;       # same as grep "pattern3"
+      /pattern4/!p;      # same as grep -v "pattern4"
+
+
+8. awk suggestions
+
+8.1. Use nawk or gawk
+
+  There are 3 popular versions: awk was released in 1977; nawk ("new awk") in
+  1985, and gawk ("GNU awk") a little later. nawk fixed bugs and added
+  user-defined functions, gsub(), match(), system(), getline, variables ARGC,
+  ARGV, and FNR, ternary operators ("x?y:z"), multidimensional arrays, and the
+  ability to access command-line variables. GNU awk added more variables and
+  many enhancements, including an option to emulate awk85.
+
+  On Linux systems, calls to awk invoke gawk. On virtually all Unix systems
+  except Solaris, calls to awk invoke nawk (awk85).
+
+  On Solaris, calls to awk invoke awk77, while nawk is available separately.
+
+  For simple tasks like "{print $2}", awk77 is fine, though "cut -f 2" will
+  accomplish the same thing more concisely. For more complex tasks, nawk or
+  gawk should be used due to bugfixes and better error handling.
+
+  To determine which version of awk is installed, run this command:
+
+       awk -v a=awk85 'BEGIN{print a}'
+
+  gawk or nawk will print "awk85". awk77 will abort with a syntax error.
+
+8.2. Use awk pattern matching
+
+  A common problem is unawareness of awk's pattern-matching. We frequently see
+  constructions like this:
+
+      awk '{ if ($0 ~ /some_pattern/) { print $2, $3 } }'     # Avoid this
+
+  This should be represented more simply:
+
+      awk '/some_pattern/ { print $2, $3 }'
+
+  awk's fundamental syntax follows this structure:
+
+      line-selectors { list-of-actions }
+
+  The "line-selectors" can be a "/regex/" or "/two/ && /regexes/", or a
+  "/pattern/,/range/" which matches all lines between the two patterns, or a
+  "!/negated-pattern/" which matches anything other than the pattern, or a
+  range of lines in the form "NR==5,NR==20" to match lines 5 through 20,
+  inclusive. Line selectors such as "/regexp/,eof" match from the indicated
+  pattern to the end-of-file. There are many more line selector options.
+
+  While it is true that all of the line selectors can be stuffed into the
+  "{list-of-actions}" part, this creates unnecessary "noise" when trying to
+  read awk scripts and suggests lack of familiarity with awk.
+
+8.3. Use awk efficiently
+
+  Do not spawn 3 processes when one process will do. Awk has built-in line
+  selection and file processing, so we can replace this:
+
+      cat file | grep 'pattern' | awk '{print $5}'     # inefficient
+
+  with a much more efficient construction:
+
+      awk '/pattern/ {print $5}' file                  # recommended
+
+  The second construction can detect if "file" doesn't exist; the first one
+  cannot. Moreover, using one process instead of three is more efficient.
+
+  If the search pattern needs to use a shell variable, use "double quotes"
+  instead of 'single quotes', but add a backslash to any field numbers:
+
+      awk "/$variable/ {print \$5}" file
+
+  If there are a lot of field numbers (like $2, $5, $7, $9, etc.), too many
+  backslashes will make the script hard to read. So pass the variable
+  externally, so you can use use single quotes again:
+
+      x='^fo[m-z]'
+      awk -v regex="$x" '$0 ~ regex {print $2, $5, $7, $9, $11, $13}' file
+
+  Do not put "/regex/" between slashes, or it will be interpreted as a literal
+  string rather than a variable needing to be expanded.
+
+8.4. Use "pattern,ranges" effectively
+
+  A pattern range selects either a block of lines or a recurring group of
+  lines. To select all lines from a specified address or location to the EOF,
+  you may literally use "eof":
+
+      # assume the process ID was defined as $PID earlier
+      ptree $PID | nawk "\$1 == $PID,eof { print \$1 }"
+
+  The awk statement was put in "double quotes" to expand $PID, but $1 was
+  prefixed with a backslash so it would be expanded by awk, not the shell.
+
+  If `ptree` produces a 2-column output that looks like this:
+      $ ptree 7729
+      9700  zsched
+        24430 /usr/lib/ssh/sshd
+          7685  /usr/lib/ssh/sshd
+            7729  /usr/lib/ssh/sshd
+              12800 -csh
+                2846  bash
+                  15527 ssh loneqessappd5
+
+  The following command will grab from that PID to the end-of-file:
+
+      $ ptree 7729 | nawk "\$1 == 7729,eof {print \$1}"
+      7729
+      12800
+      2846
+      15527
+
+8.5. Learn awk array usage
+
+  Like bash, awk supports two types of arrays: regular arrrays indexed by
+  numbers and associative arrays indexed by strings. Like bash, both arrays
+  use square[brackets]. And like bash, arrays do not begin with a punctuation
+  mark such as "@" or "%". They look like plain words with[brackets].
+
+  Unlike bash or ksh, whose indexes begin with zero, awk arrays begin with 1.
+
+  Array indexes can be incremented ("total[player++]=num"), as can array
+  values. Example: "score[$1]++". If a key for $1 does not exist, this
+  simultaneously creates the key and sets it to 1. If the key already exists,
+  this increases its value by one.
+
+  Values can alter through addition (e.g., "score[$1]+=$2") or subtraction
+  ("score[$1]-=$2"), which adds or subtracts $2 from the score for the team or
+  player represented by $1.
+
+  Arrays can be sorted in GNU awk by "asort(array-name)", which sorts by array
+  value, or "asorti(array-name)", which sorts by array index. Each function
+  overwrites the original array, but a second argument like "asort(old,new)"
+  copies array "old" to "new" and then sorts the new array.
+
+8.5.1. Traversing arrays with for loops
+
+  Two types of "for" loops are used to retrieve all keys and values.
+
+      n = asort(array)    # asort returns the count of all elements
+      for (i = 1; i <= n; i++)
+          # index is i, value is array[i]
+
+  The other "for" loop puts the array name into the statement itself.
+
+      asorti(array, array_sorted)    # copy before sorting
+      for (key in array_sorted)
+          # index is key, value is array_sorted[key]
+
+  Even though the second array was sorted, there is no promise that the entries
+  of the second command will be returned in a specific order.
+
+8.5.2. Traversing arrays using keys or values
+
+  Another method involves using the PROCINFO array built into GNU awk. This
+  gawk extension can change how the "for" loop works when an array is listed
+  in for's (parentheses).
+
+  The normal "for (key in array)" loop returns entries in random order. However:
+
+      capital["Germany"] = "Berlin"   # create associative array
+      capital["Egypt"]   = "Cairo"
+      capital["China"]   = "Beijing"
+
+      print "Step through 'capital' by key in ascending order"
+      PROCINFO["sorted_in"] = "@ind_str_asc"
+      for (k in capital) { printf "%s:%s  ", k,capital[k] }; print "\n"
+
+      print "Step through 'capital' by key in reverse order"
+      PROCINFO["sorted_in"] = "@ind_str_desc"
+      for (k in capital) { printf "%s:%s  ", k,capital[k] }; print "\n"
+
+      print "Step through 'capital' by value in ascending order"
+      PROCINFO["sorted_in"] = "@val_str_asc"
+      for (k in capital) { printf "%s:%s  ", k,capital[k] }; print "\n"
+
+      print "Step through 'capital' by value in descending order"
+      PROCINFO["sorted_in"] = "@val_str_desc"
+      for (k in capital) { printf "%s:%s  ", k,capital[k] }; print "\n"
+
+Read the docs on using PROCINFO["sorted_in"] for additional methods of sorting
+arrays to control how the elements are returned.
+
+
+9. Perl suggestions
+
+9.1. Read the man pages. "perldoc -f {command}"
+
+9.2. Always "use strict"
+
+  Without "use strict", variables spring into existence the first time they
+  are mentioned, making it almost impossible to detect spelling errors in
+  variable names, as the misspelled variable will be set to 0 or "". Further,
+  "use strict" keeps variables inside their own block, function, or package.
+
+  Also "use warnings", unless there is a good reason not to (e.g., script is
+  so short that it's not needed, or warnings may interfere with output). If
+  so, turn warnings off with "no warnings" in a defined block or subroutine.
+
+9.3. Use built-in Perl functions instead of externals
+
+  Perl has a built-in 'kill' function. There is no need to run a system()
+  command to kill a process. Perl also has built-in commands for unlink,
+  mkdir, chdir, rmdir, chmod, chown, etc. 'utime' is like Unix "touch".
+
+  Perl has a 'rename' function to change filenames. There is no need to call
+  system("mv oldname newname") to rename files, with one exception. You should
+  use system("mv") or File::Copy if moving/copying files across file systems.
+
+9.4. Slurp files into arrays
+
+  Perl is context-aware, so there is no need to slurp files into $scalars, and
+  then run split(/\n/) on the scalar to put each line into an array. Instead,
+  read files into arrays directly:
+
+      my (@array, $count);
+      open(FH, "<", "file") or die "Cannot open file: #!";
+      @array = <FH>;              # each line becomes a separate array element
+      close(FH);
+      $count = chomp(@array);     # remove trailing newline from each element
+      print "Total number of lines in file is $count\n";
+
+  Note: chomp() can operate on lists (arrays) as well as scalars. It removes a
+  trailing newline from each record, and returns the total number of records
+  in the array, which is also the number of lines in the file.
+
+9.5. Beware of Windows files on Unix
+
+  The chomp() command removes the trailing record separator (that is, the
+  current value of $/ or the $INPUT_RECORD_SEPARATOR) from an input line or
+  list. Under Unix, chomp() deletes a linefeed (LF) from the end of each line.
+
+  Under Windows, each line ends with 2 characters: carriage return and
+  linefeed (abbreviated "CRLF" or "CR/LF"), in that order. chomp() will not
+  delete both of them under a Unix or Unix-like environment (including Linux
+  and Cygwin), so you must handle that possibility:
+
+      local $/ = "\r\n";    # one way to do it
+      chomp;
+
+      chomp;                # another way to do it
+      s/\r\z//;             # removes \r only at the end of $_
+
+  Note that the \z assertion in the preceding s/// command matches the
+  absolute end-of-string. It is conceivable that a lone carriage return "\r"
+  may be embedded in the middle of a line, not followed by a linefeed. A bare
+  "s/\r//;" will delete the first CR on the line, whereas we want to delete
+  the CR at the line ending. To delete them all, use "s/\r//g;".
+
+9.6. Check the success of open(); not all files are readable
+
+      open(FH, "<", "myinput") or die "Cannot read myinput: $!";
+      open(LOG,">", "logfile") or die "Cannot open logfile: $!";
+
+9.7. Check the return value of `backticks`
+
+  Some scripts use `backticks` to execute shell commands. This is not needed
+  (see the Perl FAQ, "What's wrong with using backticks in a void context?").
+  If you must do it, at least check the result to see if it succeeded:
+
+      `mailx -s "$SUBJECT" $RECIPIENTS < $MSG_BODY`;
+      $result = $? >> 8;      # shift 8 is required here
+
+9.8. Check the return value of system()
+
+  The system() function takes a scalar or a list (array), and returns an
+  exit code as a result. Always check the return value of system() calls.
+
+  (a) To run a command and check the exit status, use system() followed by
+  die (to exit immediately) or increment an exit code (to exit later).
+
+      system("cmd >/tmp/log") == 0 or die "cmd failed: $!\n";  # exit now
+      system("cmd >/tmp/log") == 0 or ++$EXIT_CODE;            # exit later
+
+  (b) Perl issues a 16-bit code, not an 8-bit code, as the status of a system
+  call. Instead of '00000111' it returns '00000111 0000000', which multiplies
+  the result by 256. To get the normal results (an integer of 0-255), shift
+  the results 8 bits to the right.
+
+      $result = system("/some/command -with -arguments");
+      $result = $result >> 8;    # shift right 8 bits
+
+  Do not divide the $result by 256, because if command execution fails, those
+  other bits contain the exit status of "fork" and "wait" calls. The perldoc
+  page for "system()" recommends this 3-way test if you want to check for a
+  failed system call. The bit-shift command (">> 8") occurs in the else block:
+
+      system("/some/command -with -arguments");
+      if ($? == -1) {
+          print "Command failed to execute: $!\n";
+      }
+      elsif ($? & 127) {   # ampersand is the bitwise AND operator
+          printf "Command died with signal %d, %s coredump\n",
+              ($? & 127),  ($? & 128) ? 'with' : 'without';
+      }
+      else {
+          printf "Command exited with value %d\n", $? >> 8;
+      }
+
+  (c) If a system command uses redirection arrows, pipes, or conditional
+  execution symbols ("&&" or "||"), pass the command as a scalar. E.g.,
+
+      $result = system("/like/this >here");
+
+  (d) If a system command does NOT have shell metacharacters, pass each token
+  as a list for faster execution. The first token must be the command; the
+  other tokens are separate elements. E.g.,
+
+      @list = ("/like/this", "-i", "/var/input", "-o", "/var/output");
+      $result = system(@list);
+
+9.9. Use "perl -x $0" instead of an extended script
+
+  Some scripts have:
+
+      /usr/bin/perl -e '
+        # and then pass it a very long command that goes
+        # on for multiple lines. This is MUCH better than
+        # putting everything on one long line. However, ... '
+
+  If the Perl script is too long, single quotes cannot be used internally in
+  the script, and it can be difficult to read and maintain.
+
+  A better solution is to store the full Perl script inside the shell script,
+  calling it with "perl -x $0". The benefits are:
+
+     - The Perl script is NOT separate from the shell script.
+     - The two scripts can write to the same or different logfiles.
+     - The perl portion of the script is pure Perl, so a text editor can
+       set the language syntax to "Perl" for correct syntax highlighting.
+
+  "perl -x $0" causes perl to ignore everything in the parent script ($0)
+  until it comes to the first line with "#!" in column 1 and the word "perl"
+  on the same line. Any switches (such as -w) and arguments are parsed and
+  passed to the perl interpreter. Exit the perl script explicitly with "exit"
+  or let it end normally. Anything after __END__ will be ignored by both the
+  shell script and by perl, so this area can be used for text comments and
+  documentation. For more details, see "perldoc perlrun" under "-x".
+
+9.10. Exit codes for perl scripts
+
+  When a perl script exits, its exit code can be captured and interpreted by
+  Control-M, Automic, or other utilities. If the script collects errors,
+  prevent the modulo-256 error by exiting this way:
+
+      exit ($EXIT_CODE > 0 && $EXIT_CODE % 256 == 0 ? 233 : $EXIT_CODE);
+
+
+10. Solaris suggestions
+
+10.1. awk under Solaris
+
+  For portable scripts which will run under either Solaris or Linux, add this
+  to invoke nawk when awk is requested. If run under bash, the script will
+  invoke "shopt"; under ksh, the "shopt" line will be ignored.
+
+      if [[ `uname` = "SunOS" ]]; then
+          alias awk=/usr/bin/nawk
+          (( ${BASH_VERSINFO[0]} )) && shopt -s expand_aliases
+      fi
+
+10.2. grep under Solaris
+
+  /bin/grep on Solaris doesn't support the -q (quiet) option switch or the
+  interval quantifiers \{m,n\}. Use /usr/xpg4/bin/grep if you need them.
+
+10.3. ps under Solaris
+
+  /bin/ps on Solaris truncates the full process name. Use /usr/ucb/ps if you
+  need to search the full process name with all its parameters.
+
+
+11. ksh and bash incompatibilities
+
+11.1. In bash, the last command in a pipeline executes in a subshell.
+
+  In ksh88 and ksh93, the 2nd and following commands in a pipeline execute in
+  the primary shell. In bash, the 2nd and following commands in a pipeline
+  execute in a subshell. Observe:
+
+      % # output from a bash shell ...
+      % msg="a subshell"
+      % echo Y | msg="the primary shell"
+      % echo "The last command of a pipeline runs in $msg"
+      The last command of a pipeline runs in a subshell
+
+      % # output from a ksh shell ...
+      % msg="a subshell"
+      % echo Y | msg="the primary shell"
+      % echo "The last command of a pipeline runs in $msg"
+      The last command of a pipeline runs in the primary shell
+
+  Note that $msg (defined on line #1) was redefined in the pipeline on line
+  #2. In ksh, all pipeline commands run in the current environment, so $msg
+  was altered. But in bash, pipeline commands run in a subshell, so $msg was
+  NOT altered. So, beware of pipeline commands that try to change the current
+  environment.
+
+11.2. Features in ksh not in bash:
+
+  (a) Floating point, decimal arithmetic for all math operations.
+
+  (b) Aliases are enabled as soon as they are defined.
+
+  (c) David Korn, author of ksh, explains some of the differences here:
+  https://news.slashdot.org/story/01/02/06/2030205/david-korn-tells-all
+
+11.3. Features in bash not in ksh:
+
+  (a) "declare" is a synonym for "typeset".
+
+  (b) bash and ksh93 use $((...)) for math expansion. A test which might
+  succeed in bash will fail in ksh88.
+
+      if [[ $(( MYNUM + 2 )) -ne 5 ]]; then
+          echo "ERROR: textfile should contain only 5 lines." >&2
+          exit 1
+      fi
+
+  (c) "source" is a synonym for the dot command. It is not in ksh88.
+
+  (d) The '=~' operator inside [[...]] wants the right side to be an ERE.
+
+    Extended regular expressions match as in regex(3), or 'man 3 regex'. The
+    left side is a string, the right side is a pattern. Condition exits 0 if a
+    match was found, 1 if no match, or 2 if the regex had a syntax error.
+
+  (e) bash supports associative arrays; ksh doesn't.
+
+  (f) bash supports the $PIPELINE array and the "pipefail" option.
+
+
+#-----[ end "Shell Scripting Best Practices" ]-----
