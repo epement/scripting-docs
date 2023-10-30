@@ -1,8 +1,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2023-07-21 16:01:56 (UTC-0400)
-     version 7.4.0
+     2023-10-29 22:22:11 (GMT-0400)
+     version 8.0.0
 
 = PURPOSE =
 
@@ -635,7 +635,8 @@
         [[ abcd4 = "ab*[1-5]" ]]     # returns false
 
   To use wildcards or special patterns (e.g., [1-5]), put the pattern on the
-  right side of the "=" or "==" sign, and omit the double-quotes.
+  RIGHT side of the "=" or "==" sign, and omit the double-quotes. If you put
+  wildcard pattern on the left side, it won't work.
 
   Note that the right side of a [[bracketed]] test has implied ^ and $ anchors
   at the beginning and end of the pattern. Contrast this with grep, where
@@ -2057,12 +2058,39 @@
   command line but the file cannot be opened.
 
 
-37. Interactive sessions
+37. Using shell commands in sed, awk, perl, or python
+
+  Without going into detail, direct execution of shell commands and the
+  insertion of output can occur from within the script.
+
+  Original sed has no way to do this. In recent versions of GNU sed, shell
+  commands can be executed in 3 ways:
+
+      s/aa (bb)/run -me "\1"/e;  # use matched portion of pattern
+      e;            # execute pattern space, print without trailing newline
+      e cmd args;   # run "cmd args" and print with a trailing newline
+
+  In awk, pipe a command to getline "(cmd|getline)" or use the system()
+  function. Awk does not support `backticks` like perl. getline is very tricky
+  to use correctly. See http://awk.freeshell.org/AllAboutGetline
+
+  In perl, insert the output of system commands via `backticks` or qx(). Use
+  qx'...' to avoid variable interpolation. Another option is open(FH,"cmd|").
+  Execute system commands without insertion by using system(), exec(), or
+  open(FH,"|cmd"). Unlike sed, the /e modifier in s/from/to/e evaluates the
+  "to" portion as perl code, rather than sending it to the shell.
+
+  In python, use subprocess.run() or subprocess.check_output(). Older versions
+  of python recommended subprocess.getoutput() or subprocess.Popen(). Other
+  possibilities are os.system() and os.popen().
+
+
+38. Interactive sessions
 
   Although this document is aimed at shell scripting, a few comments about
   interactive operations should be helpful.
 
-37.1. Interactive start-up
+38.1. Interactive start-up
 
   All bash and ksh users will follow the process described earlier in the
   section on "Start-up files". For interactive shells, include this:
@@ -2076,13 +2104,13 @@
   If bash is called as a non-login shell (e.g., if called from an already
   running ksh or bash prompt), bash will try to run ~/.bashrc, if it exists.
 
-37.2. For root users
+38.2. For root users
 
   If sysadmins are logged in as root, they may need to run commands under a
   user or service account. If those accounts set up environment variables,
   these commands will fail unless they "su" to the account first.
 
-37.3. Customize the shell prompt
+38.3. Customize the shell prompt
 
   The prompt shown on each line of an interactive ksh or bash session is set
   by the variable PS1, which can be modified. The variables PS2, PS3, and PS4
@@ -2118,13 +2146,13 @@
   use a default value of PS1, which *will* be readable.
 
 
-38. Interactive menu systems
+39. Interactive menu systems
 
   Simple menus for interactive use can be built using "echo" (or "printf") and
   using the "read" command to put the response into a variable. However, it is
   easier to build using "select". These commands are common:
 
-38.1. read
+39.1. read
 
   The "read" command is built-in for ksh and bash. It should be followed by
   one or more names to create variables. "read" will attempt to read one line
@@ -2154,7 +2182,7 @@
 
   If "read" is not followed by any variable name, the input goes into $REPLY.
 
-38.2. select
+39.2. select
 
   "select" creates a menu system for interactive choices. "select" can accept
   wildcards and display a list of filenames that match the wildcard pattern.
@@ -2202,7 +2230,7 @@
 
   The "break" command will exit the "do" loop of the select command.
 
-38.3. trap
+39.3. trap
 
   "trap" is used to prevent users from manually exiting a menu system via
   keyboard commands such as Control-C, Control-\, or other ways to obtain a
@@ -2239,7 +2267,7 @@
   commands, even using stty. It is also impossible to trap a "kill -9"
   (SIGKILL) command. This is by design in Unix, for security and safety.
 
-38.4. tput and stty
+39.4. tput and stty
 
   "tput" is part of the ncurses package. It is used to both query the terminal
   and send ("put") characters, colors, or commands to the terminal. For more
@@ -2254,13 +2282,13 @@
       stty -isig        # disable the interrupt, quit, and suspend chars
       stty -icanon      # disable the erase, kill, werase, and rprnt chars
 
-38.5. dialog
+39.5. dialog
 
   "dialog" is a popular tool that relies on ncurses, but is not installed by
   default on Linux or Unix systems. It is used for creating input windows and
   boxes for menu systems. See https://linuxcommand.org/lc3_adv_dialog.php
 
-38.6. expect
+39.6. expect
 
   "expect" is a popular Unix tool to automate responses to programs normally
   intended for interactive use. It was written in the Tcl programming language

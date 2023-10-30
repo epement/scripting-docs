@@ -1,9 +1,7 @@
 # Emacs: -*- mode:outline; fill-column:78; tab-width:2; indent-tabs-mode:nil; -*-
 #
 # filename: Essentials_of_Shell_Scripting_outline-mode.txt  (.rm 78)
-#    title: "Essentials of Shell Scripting"
 #   author: Eric Pement
-#  version: 7.4.0
 #
 # format for numbered output:
 #   awk -v indent=0 -f outline_numbered.awk Essentials_of_Shell_Scripting_outline-mode.txt |
@@ -12,8 +10,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2023-07-21 16:01:56 (UTC-0400)
-     version 7.4.0
+     2023-10-29 22:22:11 (GMT-0400)
+     version 8.0.0
 
 = PURPOSE =
 
@@ -646,7 +644,8 @@
         [[ abcd4 = "ab*[1-5]" ]]     # returns false
 
   To use wildcards or special patterns (e.g., [1-5]), put the pattern on the
-  right side of the "=" or "==" sign, and omit the double-quotes.
+  RIGHT side of the "=" or "==" sign, and omit the double-quotes. If you put
+  wildcard pattern on the left side, it won't work.
 
   Note that the right side of a [[bracketed]] test has implied ^ and $ anchors
   at the beginning and end of the pattern. Contrast this with grep, where
@@ -2066,6 +2065,33 @@
 
   grep, sed, and awk all exit non-zero if a filename is specified on the
   command line but the file cannot be opened.
+
+
+* Using shell commands in sed, awk, perl, or python
+
+  Without going into detail, direct execution of shell commands and the
+  insertion of output can occur from within the script.
+
+  Original sed has no way to do this. In recent versions of GNU sed, shell
+  commands can be executed in 3 ways:
+
+      s/aa (bb)/run -me "\1"/e;  # use matched portion of pattern
+      e;            # execute pattern space, print without trailing newline
+      e cmd args;   # run "cmd args" and print with a trailing newline
+
+  In awk, pipe a command to getline "(cmd|getline)" or use the system()
+  function. Awk does not support `backticks` like perl. getline is very tricky
+  to use correctly. See http://awk.freeshell.org/AllAboutGetline
+
+  In perl, insert the output of system commands via `backticks` or qx(). Use
+  qx'...' to avoid variable interpolation. Another option is open(FH,"cmd|").
+  Execute system commands without insertion by using system(), exec(), or
+  open(FH,"|cmd"). Unlike sed, the /e modifier in s/from/to/e evaluates the
+  "to" portion as perl code, rather than sending it to the shell.
+
+  In python, use subprocess.run() or subprocess.check_output(). Older versions
+  of python recommended subprocess.getoutput() or subprocess.Popen(). Other
+  possibilities are os.system() and os.popen().
 
 
 * Interactive sessions

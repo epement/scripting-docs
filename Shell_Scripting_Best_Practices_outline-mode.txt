@@ -1,10 +1,7 @@
 # Emacs: -*- mode:outline; fill-column:78; tab-width:2; indent-tabs-mode:nil; -*-
 #
 # filename: Shell_Scripting_Best_Practices_outline-mode.txt  (.rm 78)
-#    title: "Shell Scripting Best Practices"
 #   author: Eric Pement
-#  updated: 2023-07-14 15:20:24 (UTC-0400)
-#  version: 3.13.0
 #
 # format for numbered output:
 #   awk -v indent=0 -f outline_numbered.awk Shell_Scripting_Best_Practices_outline-mode.txt |
@@ -13,8 +10,8 @@
 "Shell Scripting Best Practices"
 
      by Eric Pement
-     2023-07-14 15:20:24 (UTC-0400)
-     version 3.13.0
+     2023-10-29 20:22:09 (GMT-0400)
+     version 4.0.0
 
 = PURPOSE =
 
@@ -87,9 +84,10 @@
 
   For documentation not tied to a versioned software item (such as this file),
   changes that add, delete, or move main headings (1, 2, 3, ...) should
-  increment the Major version number. Changes to add, delete, or move
-  subheadings (1.1, 1.2, ...) should increment the Minor version number, and
-  changes only to body text are equivalent to Patch version changes.
+  increment the Major version number and set the remaining numbers to zero.
+  Changes to add, delete, or move subheadings (1.1, 1.2, ...) should increment
+  the Minor version number, and changes only to body text are equivalent to
+  Patch version changes.
 
   Documentation for sofware releases should have the version number of the
   document correspond to the software version it describes. To indicate
