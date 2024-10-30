@@ -10,8 +10,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2023-10-29 22:22:11 (GMT-0400)
-     version 8.0.0
+     2024-10-29 21:29:48 (UTC-0400)
+     version 8.0.1
 
 = PURPOSE =
 
@@ -29,9 +29,12 @@
   shell, but they are usually symlinks to "/bin/bash" or "/bin/dash". Run
   "file /bin/sh" to determine which shell "sh" points to.
 
-  Bash is preferred over ksh because it is more widely distributed, better
-  documented, and actively maintained. ksh is still active but has inadequate
-  maintenance and distribution.
+  bash is preferred over ksh because it is more widely distributed, better
+  documented, actively maintained, and is installed by default on Linux
+  systems. ksh is still maintained but has inadequate distribution. ksh
+  originally had a proprietary license from AT&T, which causes it to be
+  excluded from GNU/Linux distributions of free software with GNU General
+  Public Licenses.
 
   Scripts in csh (C shell) or tcsh should be rewritten in bash or ksh, because
   csh has no way to split stderr from stdout. For additional reasons, see
@@ -80,7 +83,7 @@
   For the rest of this document, "~" represents the $HOME directory.
 
   If "/bin/bash" is the login shell, bash tries to run ~/.bash_profile,
-  ~/.bash_login, or ~/.profile, in that order. Bash runs the first one it
+  ~/.bash_login, or ~/.profile, in that order. bash runs the first one it
   finds and does not execute the others, even if they exist.
 
   If "/bin/ksh" is the login shell, ksh tries to run ~/.profile.
@@ -185,9 +188,12 @@
 
   Variables created only for the script should be lower_case, while variables
   outside the script (in the environment) are normally UPPER_CASE. This is
-  programming advice, not a bash or ksh requirement. Shell scripts can access
-  internal, built-in variables, including LINENO, RANDOM, and REPLY, which do
-  not need to be explicitly defined.
+  programming advice, not a bash or ksh requirement.
+
+  bash and ksh scripts can also access built-in variables that spring into
+  existence automatically without being defined. Common internal variables are
+  LINENO, OLDPWD, PPID, PWD, RANDOM, REPLY, and SECONDS. Consult the man pages
+  to learn about other internal variables.
 
 ** Shell variables
 
@@ -398,8 +404,9 @@
   $((...)). You may use it, but it is normally omitted. The dollar sign is
   REQUIRED in every other context.
 
-  $var and ${var} mean the same thing. ${var} shows where the variable ends
-  and can prevent the shell from searching for a longer name. E.g.,
+  $var and ${var} mean the same thing. The curly braces in ${var} show where
+  the variable name ends and can prevent the shell from searching for a longer
+  name. For example,
 
       echo "Email ${type}_mgt_${state}_dept"     # not "$type_mgt_$state_dept"
 
@@ -422,7 +429,7 @@
 
   In ksh, "set -A" creates arrays like so: "set -A list foo bar baz".
 
-  In bash, "set -A" does nothing. Bash uses "declare" or "typeset" to define
+  In bash, "set -A" does nothing. bash uses "declare" or "typeset" to define
   arrays, not "set", with switches "-a" (indexed) or "-A" (associative). But
   as mentioned above, "declare" or "typeset" can be omitted. To begin indexing
   at 1 instead of zero:
@@ -454,10 +461,10 @@
 ** Using associative arrays
 
   Associative arrays are not available in ksh88 or mksh. In bash or ksh93,
-  associative arrays must be pre-declared with "typeset -A arrayname". Bash
+  associative arrays must be pre-declared with "typeset -A arrayname". bash
   supports "declare" as a built-in synonym for "typeset".
 
-  Bash and ksh93 both create associative arrays the same way:
+  bash and ksh93 both create associative arrays the same way:
 
       typeset -A month                    # requires capital A
       month=( [Jan]=1 [Feb]=2 [Mar]=3 )   # without repeating the array name
@@ -519,7 +526,8 @@
   If the variable is typeset as an array, "+=" adds additional elements to it.
 
       # standard arrays, indexed from 0
-      # In bash, the parentheses signal to create an array or append to one
+      # In bash, parenthesized words following "=" will create a new array,
+      # and following "+=" will append to an existing array
       numbers=( zero one two ); numbers+=( three four )
 
       # associative arrays:
@@ -809,7 +817,7 @@
 
   In bash and ksh, "[!...]" is a negated character set, matching any character
   EXCEPT those in the enclosed brackets. Regexes begin negated character sets
-  with a caret, as "[^...]". Bash now lets either "!" or "^" introduce a
+  with a caret, as "[^...]". bash now lets either "!" or "^" introduce a
   negated character set, as a convenience for experienced regex users.
 
 ** Extended pattern matching
@@ -1292,7 +1300,7 @@
 * Ternary operators
 
   The ternary operator is a concise, three-element syntax of (a?b:c), meaning,
-  if "a" is true, return "b"; else, return "c". Bash and ksh permit ternary
+  if "a" is true, return "b"; else, return "c". bash and ksh permit ternary
   operators only inside math $((statements)) or math ((tests)), like so:
 
       # bash variables must be integers; ksh also supports floating point
@@ -1342,7 +1350,7 @@
       "<<"  says input comes from a here-document, up until a LABEL
       "<<<" says input comes from the following string
 
-  Bash supports "<<<", as does ksh93m+ and later. This syntax avoid pipes and
+  bash supports "<<<", as does ksh93m+ and later. This syntax avoid pipes and
   echo statements. Example:
 
       echo $variable | sed ':a; $!N; $!ba; s/\n/:/g'   # ksh or bash
