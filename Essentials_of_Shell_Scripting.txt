@@ -1,8 +1,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2024-11-01 23:41:21 (UTC-0400)
-     version 8.1.0
+     2024-11-02 19:18:35 (UTC-0400)
+     version 8.1.1
 
 = PURPOSE =
 
@@ -2034,8 +2034,9 @@
 
   "sort" filters one or many files which may have delimited fields. It creates
   sorted output based on key fields, and can filter to show only unique keys.
-  Options are available to ignore case, handle dates or numbers, change
-  delimiters, ignore punctuation, and more.
+  Options are available to ignore case, handle dates or numbers, compare
+  quantity abbreviations (like 9K or 3M), compare version numbers (like
+  "10.3.5a"), change delimiters, ignore punctuation, and more.
 
   "uniq" filters one file, which may have delimited fields and need not be
   sorted. It prints unique lines, but can print only duplicate lines or keys,
