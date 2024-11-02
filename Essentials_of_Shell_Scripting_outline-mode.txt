@@ -10,8 +10,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2024-10-29 21:29:48 (UTC-0400)
-     version 8.0.1
+     2024-11-01 23:41:21 (UTC-0400)
+     version 8.1.0
 
 = PURPOSE =
 
@@ -627,18 +627,24 @@
   The process ID of the last background process is $! in ksh and bash.
 
 
-* Difference between [ ... ] and [[...]] and ((...))
+* Difference between [ ... ] and [[ ... ]] and ((...))
 
-  [ ... ], [[...]], and ((...)) are all used in "test" contexts. The first two
-  test for strings or numbers; the last one is strictly for math expressions.
+  [ ... ], [[ ... ]], and ((...)) are all used in "test" contexts. The first
+  two with square brackets test for strings or numbers; the last one with
+  doubled parentheses is strictly for math expressions.
 
-** "[ ... ]" requires a space after '[' and a space before ']'
+  "[ ... ]" calls the external command /bin/test. "[[ ... ]]" are reserved
+  words built into bash and ksh. As built-in commands, they are faster and
+  more flexible. Both "[ ... ]" and "[[ ... ]]" can handle string, numeric,
+  and pattern tests.
 
-  "[[...]]" is built into ksh/bash and does not require these spaces. [ ... ]
-  invokes /bin/test. [[...]] is built-in, so it is faster. The ((...)) test
-  doesn't need spaces before or after the parentheses.
+  A space character is required after the opening symbols "[" or "[[", and
+  also before the closing symbols "]" or "]]".
 
-** The "=" means different things inside [ ... ] and [[...]]
+  The ((...)) test doesn't need spaces before or after the parentheses,
+  because the "((" and "))" are operators, not reserved words.
+
+** The "=" means different things inside [ ... ] and [[ ... ]]
 
   Inside single brackets, an equal sign always tests for string equality,
   regardless of whether the right parameter is "quoted" or not.
@@ -668,13 +674,13 @@
 
   If checking for STRING equality, use:
 
-        [[ $pattern == "string" ]]  or  [ "$pattern" = "string" ]  or
-        [[ $pattern = shell_wildcards ]]
+       [[ $pattern == "string" ]]  or  [ "$pattern" = "string" ]  or
+       [[ $pattern = shell_wildcards ]]
 
   If checking for NUMERIC equality (or inequality), use:
 
-        (( $? == 0 ))   or    [[ $? -eq 0 ]]  or      [ $? -eq 0 ]
-        (( $num > 0 ))  or  [[ $num -gt 0 ]]  or  [ "$num" -gt 0 ]
+       (( $? == 0 ))   or    [[ $? -eq 0 ]]  or      [ $? -eq 0 ]
+       (( $num > 0 ))  or  [[ $num -gt 0 ]]  or  [ "$num" -gt 0 ]
 
 ** Filename wildcards expand inside [ ... ], but not inside [[ ... ]]
 
@@ -683,8 +689,8 @@
   the pattern matches fully. (Example: unquoted b?r will match a file named
   "bar" but not a file named "barn")
 
-  Inside double square brackets [[...]], unquoted patterns like foo*, b?r, and
-  ba[Zz] are expanded to SHELL wildcards, which can only match strings and
+  Inside double square brackets [[ ... ]], unquoted patterns like foo*, b?r,
+  and ba[Zz] are expanded to SHELL wildcards, which can only match strings and
   variable values, but can NEVER match filenames.
 
   Both bash and ksh work the same here. This shows the difference:
@@ -698,7 +704,7 @@
         No luck             # because a string was "quoted"
         .
         $ [[ -f a*c ]] && echo File found || echo No luck
-        No luck             # because [[...]] changes the context
+        No luck             # because [[ ... ]] changes the context
         .
         $ [[ -f abc ]] && echo File found || echo No luck
         File found          # because the filename was explicit
@@ -715,12 +721,12 @@
 ** Boolean operators within [ ... ] and [[ ... ]] are different
 
   Within [ ... ], use -a for an AND test. E.g., "[ -r file -a -x file ]".
-  Within [[...]], use && for an AND test. E.g., "[[-r file && -x file]]".
+  With [[ ... ]], use && for an AND test. E.g., "[[ -r file && -x file ]]".
 
   Within [ ... ], use -o for an OR test. E.g., "[ -f file1 -o -f file2 ]".
-  Within [[...]], use || for an OR test. E.g., "[[-f file1 || -f file2]]".
+  With [[ ... ]], use || for an OR test. E.g., "[[ -f file1 || -f file2 ]]".
 
-** Variables in [ ... ] need "quotes"; vars in [[...]] don't need them
+** Variables in [ ... ] need "quotes"; vars in [[ ... ]] don't need them
 
   Within [ ... ], if $file is not defined, "[ -r $file ]" will return TRUE for
   ANY FILE TEST CONDITION (-r, -w, -x, -d, -f, -s, etc.)!! The variable must
@@ -737,13 +743,14 @@
   whether the variable is "quoted" or not.
 
 
-* Comparing numbers in ((...)) or [[...]]
+* Comparing numbers in ((...)) or [[ ... ]]
 
-  Use == for equal numbers in ((...)); use -eq for numbers in [[...]].
+  Use == for equal numbers in ((...)); use -eq for numbers in [[ ... ]].
 
-  Use > or < for numbers in ((...)); use -gt or -lt for numbers in [[...]].
+  Use > or < for numbers in ((...)); use -gt or -lt for numbers in [[ ... ]].
+  Remember that all number must be integers; no decimal parts allowed.
 
-  [[ 0 ]] returns TRUE, because zero is treated as a string by [[...]].
+  [[ 0 ]] returns TRUE, because zero is treated as a string by [[ ... ]].
 
   (( 0 )) returns FALSE, because zero is treated as a number by ((...)).
 
@@ -760,7 +767,7 @@
   In the table below, the top 3 examples use a colon. The colon-and-symbol
   checks whether the variable is true (declared and set to a non-null string).
   NOTE: 0 is considered "true" for variable expansion, but false in other
-  contexts. See the section on "Comparing numbers in ((...)) or [[...]]".
+  contexts. See the section on "Comparing numbers in ((...)) or [[ ... ]]".
 
   In the middle 3 cases without the colon, the test is only whether $v was set
   (defined), not whether $v is non-null. Example: in the variables "x=0" and
@@ -837,9 +844,9 @@
   Shell extended patterns use prefix quantifiers "+(like|this)".
 
   BASH ONLY: Extended matching is automatically available for expansion or
-  tests, but not filename matching (e.g., "/bin/ls @(aa|bb|cc)"). Enable
-  extended filename matching using the "shopt" command to set shell options,
-  as "shopt -s extglob".
+  tests, but not filename matching (e.g., "/bin/ls @(aa|bb|cc)"). To use
+  extended matching for filenames, enable it earlier in the script with the
+  "shopt" command to set shell options, as "shopt -s extglob".
 
   KSH ONLY: Extended matching is automatically available for both tests and
   filename matching. New versions of ksh (like ksh93) support additional
@@ -1096,7 +1103,7 @@
       [[ $str != shglob ]] # true if $str does not match the shell wildcard
       [[ $str =~ regex ]]  # true if $str matches an extended regex (bash, ksh93s+)
 
-  Numeric comparisons with "[ ... ]" or "[[...]]" must use integers.
+  Numeric comparisons with "[ ... ]" or "[[ ... ]]" must use integers.
 
       int1  -eq,-ne  int2  # Equal, Not equal
       int1  -gt,-ge  int2  # Greater than, Greater than or equal to
@@ -1106,9 +1113,9 @@
 
   Use "!" to create a logical NOT prefix. Example: "[[ ! -d $file ]]"
 
-  Use "-a" (logical AND) within "[ ... ]", but "&&" within "[[...]]".
+  Use "-a" (logical AND) within "[ ... ]", but "&&" within "[[ ... ]]".
 
-  Use "-o" (logical OR) within "[ ... ]", but "||" within "[[...]]".
+  Use "-o" (logical OR) within "[ ... ]", but "||" within "[[ ... ]]".
 
 
 * Loops: while, until, for, break, and continue
@@ -1238,7 +1245,7 @@
   We often test the exit status of the previous command. The exit code of the
   last command is stored in the variable $?. Check it like this:
 
-      if [[ $? -eq 0 ]]; then     # NB: use "-eq" inside of [[...]], not "=="
+      if [[ $? -eq 0 ]]; then     # Use "-eq" inside of [[ ... ]], not "=="
           echo Success!
       fi
 
@@ -1835,7 +1842,7 @@
   whether the operation was true or could be successfully performed. E.g.,
 
       if (( count > 19 ))              # test whether $count is greater than 19
-      if [[ $count -gt 19 ]]           # same test, using the [[...]] syntax
+      if [[ $count -gt 19 ]]           # same test, using the [[ ... ]] syntax
 
       ((area = base * height))         # create $area and assign it this value
       let area="base*height"           # another way to write this
