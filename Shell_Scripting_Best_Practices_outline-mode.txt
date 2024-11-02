@@ -10,8 +10,8 @@
 "Shell Scripting Best Practices"
 
      by Eric Pement
-     2024-10-29 22:20:07 (UTC-0400)
-     version 4.0.2
+     2024-11-02 18:55:22 (UTC-0400)
+     version 4.0.3
 
 = PURPOSE =
 
@@ -242,12 +242,12 @@
 ** Avoid embedded control codes
 
   While it is possible to embed literal control codes into scripts, it is not
-  recommended. For example, embedding Control-A (0x01) in the script will
-  likely display in a text editor as "^A", which can easily be mistaken as a
-  regular expression for start-of-line (^) followed by capital A. Please avoid
+  recommended. For example, embedding Control-Z (0x1A) in the script will
+  likely display in a text editor as "^Z", which can easily be mistaken as a
+  regular expression for start-of-line (^) followed by capital Z. Please avoid
   this ambiguity.
 
-  Such a command might look like: 'grep "^A35=F" file' or 'tr "^A" "\n"'
+  Such a command might look like: 'grep "^Z35=F" file' or 'tr "^Z" "\n"'
 
   SOLUTION #1. If the tool supports escape sequences for unprintable chars,
   use that. POSIX awk supports \NNN for 1 to 3 octal digits [0-7], and GNU
@@ -258,18 +258,21 @@
   A-Z). Character class [[:cntrl:]] matches decimal codes 0-31 and 127-159.
   There are also POSIX escape sequences of the form \P{property-name}.
 
-      # Need to match Control-A immediately followed by '35=F'
-      grep -P '\x{01}35=F' file   # enable PCRE in GNU grep to match Ctrl-A
-      grep -P '\cA35=F' file      # alternate way to match the same code
+      # Match Control-Z followed by '35=F'
+      grep -P '\x{1A}35=F' file   # enable PCRE in GNU grep to match Ctrl-Z
+      grep -P '\cZ35=F' file      # alternate way to match the same code
 
-  SOLUTION #2. Rewrite the character as a shell variable and use "double
-  quotes" to expand the variable:
+  SOLUTION #2. Rewrite the character as a shell variable using ANSI C strings
+  (like $'this') and use "double quotes" to expand the variable:
 
-      CTRL_A=$(print '\001')     # Control-A == hex 0x01 == octal \001
-      grep "${CTRL_A}35=F" file
+      CTRL_Z=$(print '\032')     # for ksh88 or old shell scripts
+      CTRL_Z=$'\032'             # octal - for ksh93 or bash, or
+      CTRL_Z=$'\x1A'             # hex - for ksh93 or bash, or
+      CTRL_Z=$'\cZ'              # control Z - for ksh93 or bash
+      grep "${CTRL_Z}35=F" file
 
-  If neither solution is acceptable, insert a #comment line above the
-  character, warning of an embedded control code on the next line.
+  bash supports ANSI quoting using extended Unicode strings of \uHHHH (4 hex
+  digits) and \uHHHHHHHH (8 hex digits).
 
 ** Use here-documents instead of multiple "echo" statements
 
