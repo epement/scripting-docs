@@ -1,8 +1,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2024-11-02 19:18:35 (UTC-0400)
-     version 8.1.1
+     2024-11-09 10:57:29 (UTC-0500)
+     version 8.1.2
 
 = PURPOSE =
 
@@ -624,7 +624,7 @@
   two with square brackets test for strings or numbers; the last one with
   doubled parentheses is strictly for math expressions.
 
-  "[ ... ]" calls the external command /bin/test. "[[ ... ]]" are reserved
+  "[ ... ]" calls the external command /bin/test. "[[" and "]]" are reserved
   words built into bash and ksh. As built-in commands, they are faster and
   more flexible. Both "[ ... ]" and "[[ ... ]]" can handle string, numeric,
   and pattern tests.
