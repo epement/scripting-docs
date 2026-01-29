@@ -1,8 +1,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2024-11-09 10:57:29 (UTC-0500)
-     version 8.1.2
+     2026-01-29 13:04:55 (UTC-0500)
+     version 8.1.4
 
 = PURPOSE =
 
@@ -1329,6 +1329,11 @@
   DO NOT use "2>&1 >file". This sends stderr to console (current location of
   stdout) and redirects only stdout to file.
 
+  To redirect stderr to /dev/null, use "2> /dev/null". For example, this
+  command deletes "Permission denied" errors from the screen output:
+
+      find / -iname '*code.png' -type f -readable 2> /dev/null
+
   Redirection arrows (">", "<", and variants) can legally occur ANYWHERE ON
   THE LINE. All of the following are valid syntax for creating a new file:
 
@@ -1903,7 +1908,7 @@
   bash and ksh93 have printf built-in, which may differ from /bin/printf.
   printf can left-align, right-align, pad, and truncate strings or numbers.
   Unlike "print", "\n" must be used for newlines. For every item preceded by
-  "%", there must be a corresponding parameter, string, or variable.
+  "%", there should be a corresponding parameter (a variable, number, etc.).
 
       # bash or ksh: separate parameters with SPACES, do not use parens
       # There are 3 parameters after the "expression"
@@ -1912,6 +1917,26 @@
       # awk or perl: separate params with COMMAS, parens are optional
       printf("Line #% 3i [%i]: %s\n", NR, start - end, $0)        # awk
       printf "%s, %s, %s, %s\n", $a ? $x : $y, @list[-3 .. -1];   # perl
+
+  If the number of parameters after the "expression" is less than the number
+  of format variables (%s, %i, %f, etc.), the remaining variables are replaced
+  with the empty string ("").
+
+  If the number of parameters after the "expression" is greater than the
+  number of format variables, the "expression" is repeated until the parameter
+  list is empty. For example:
+
+      # The command "seq 5" prints numbers 1-5 on separate lines
+      # Note the newline "\n" at the end of the expression
+      $ printf ". arg1[%s] arg2[%s]\n" $(seq 5)
+      . arg1[1] arg2[2]
+      . arg1[3] arg2[4]
+      . arg1[5] arg2[]
+
+      # Change the newline to a single space. Note that the output
+      # will print without a terminating newline.
+      $ printf ". arg1[%s] arg2[%s] " $(seq 5)
+      . arg1[1] arg2[2] . arg1[3] arg2[4] . arg1[5] arg2[]
 
   The format options are "%[flags][width][.precision]format-as", where:
 
