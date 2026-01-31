@@ -1,8 +1,8 @@
 "Essentials of Shell Scripting"
 
      by Eric Pement
-     2026-01-29 13:04:55 (UTC-0500)
-     version 8.1.4
+     2026-01-31 15:49:07 (UTC-0500)
+     version 8.2.0
 
 = PURPOSE =
 
@@ -1368,7 +1368,72 @@
   likewise redirects standard error to the specified destination from that
   point forward.
 
-22.2. Here-documents
+22.2. Process substitution
+
+  Process substitution is a form of redirection which reads from <(...) or
+  writes to >(...) a process that will run in a subshell, not the current
+  shell. It is available in bash and ksh93. The source or destination in
+  process substitution is a read-only file that temporarily resides in the
+  /proc (process) directory (if Linux). It is not the same as piping.
+
+  The benefit is that stdin/stdout permit only one stream, but if your program
+  can handle multiple files, each process substitution becomes a "file".
+
+      $ hostname | md5sum   # in piping, no file exists
+      d34db4aed2720b78cfba574638db08fd *-
+
+      $ md5sum <(hostname)  # same result for the same string
+      d34db4aed2720b78cfba574638db08fd */dev/fd/63
+
+      $ md5sum <(hostname) <(whoami) <(uname) <(date)
+      d34db4aed2720b78cfba574638db08fd */dev/fd/63
+      b40c3fc86d904bb35b2065d6e843f6a2 */dev/fd/62
+      256c80c72d721215bcd2645d1ea53b09 */dev/fd/61
+      81909a8979cf12eb24958e9c51b9089b */dev/fd/60
+      
+  For output, the tee command accepts piped input and sends output to one or
+  more files and to stdout. For example:
+
+      cmd | tee file1 file2 | sed "s/fix/this/"    # output to 2 files
+
+      # Send the output to 2 printers instead
+      cmd | tee >(lpr -pBW) >(lpr -pColor) | sed "s/fix/this/"
+
+  Another use of tee is to create and send a *.tar file to 2 different hosts:
+
+      # 'cf' create a file archive, '-' with no name
+      tar cf - ~/mydir | tee >(ssh host1 tar xf -) >(ssh host2 tar xf -)
+
+  In Cygwin and MSYS, the output goes to /dev, not /proc, and works more like
+  a pipe. Below, cat returns the details (from ls) about the temp file.
+
+      $ ls -l >(cat)
+      lrwxrwxrwx 1 ericp 197121 0 Jan 31 14:28 /dev/fd/63 -> 'pipe:[137438965832]'|
+
+  For input, process substitution lets you create temporary files without
+  needing to save the file to disk. In the examples below, wget writes the
+  file to disk and curl writes to stdout.
+
+      # The slow way. Get a file and use vim to edit it.
+      wget https://pement.org/sed/sed1line.txt
+      vim sed1line.txt
+
+      # Using process substitution.
+      vim <(curl https://pement.org/sed/sed1line.txt)
+
+      # In this case, piping can do much the same.
+      curl https://pement.org/sed/sed1line.txt | vim -
+      
+  Sort and compare two similar files without changing either file.
+
+      diff -s <(sort file1) <(sort file2)
+
+  Preview the results of using a sed script to modify a file:
+
+      # Use -s to report if the files are identical
+      diff -s file <(sed -f script.sed file)
+
+22.3. Here-documents
 
   Avoid putting "echo" and >>redirection commands on each line:
 
